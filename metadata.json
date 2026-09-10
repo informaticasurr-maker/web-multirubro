@@ -1,0 +1,6 @@
+{
+  "name": "Barbería Elite & Turnos",
+  "description": "Plataforma profesional para barbería con turnos en tiempo real con renderizado condicional, reserva por barbero, WhatsApp, galerías, historias, reseñas, geolocalización GPS y panel de control administrativo.",
+  "requestFramePermissions": ["geolocation", "notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
