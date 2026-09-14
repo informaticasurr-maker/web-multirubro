@@ -8,7 +8,9 @@ import {
   ReviewItem,
   BarberShopConfig,
   PushPromo,
-  AppointmentStatus
+  AppointmentStatus,
+  AdminUser,
+  FirebaseCustomConfig
 } from '../types';
 import {
   INITIAL_CONFIG,
@@ -21,6 +23,8 @@ import {
   INITIAL_PROMOS
 } from '../data/initialData';
 import { updateBarberShopSchema } from '../utils/seoHelper';
+import { auth, googleProvider, initFirebase } from '../lib/firebase';
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 
 interface BarberContextType {
   config: BarberShopConfig;
@@ -32,6 +36,7 @@ interface BarberContextType {
   reviews: ReviewItem[];
   promos: PushPromo[];
   isAdmin: boolean;
+  currentUser: AdminUser | null;
   clientPhone: string;
   activeNotification: { title: string; message: string } | null;
 
@@ -39,8 +44,13 @@ interface BarberContextType {
   setClientPhone: (phone: string) => void;
   loginAdmin: (pin: string) => boolean;
   verifyPin: (pin: string) => boolean;
-  logoutAdmin: () => void;
+  loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  logoutAdmin: () => Promise<void>;
   updateConfig: (newConfig: Partial<BarberShopConfig>) => void;
+  addAllowedAdminEmail: (email: string) => void;
+  removeAllowedAdminEmail: (email: string) => void;
+  isEmailAuthorized: (email?: string | null) => boolean;
+  saveFirebaseCustomConfig: (fbConfig: FirebaseCustomConfig) => void;
 
   // Appointments
   addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'status'>) => Appointment;
@@ -130,11 +140,45 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return sessionStorage.getItem('barberia_admin_auth') === 'true';
   });
 
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+
   const [clientPhone, setClientPhoneState] = useState<string>(() => {
     return localStorage.getItem(STORAGE_KEYS.CLIENT_PHONE) || '';
   });
 
   const [activeNotification, setActiveNotification] = useState<{ title: string; message: string } | null>(null);
+
+  // Helper to check if an email address is allowed as administrator
+  const isEmailAuthorized = (email?: string | null): boolean => {
+    if (!email) return false;
+    const cleanEmail = email.toLowerCase().trim();
+    const allowed = (config.allowedAdminEmails || ['informaticasur@gmail.com']).map((e) =>
+      e.toLowerCase().trim()
+    );
+    if (cleanEmail === 'informaticasur@gmail.com') return true;
+    return allowed.includes(cleanEmail);
+  };
+
+  // Listen to Firebase Auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && user.email && isEmailAuthorized(user.email)) {
+        setCurrentUser({
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || 'Administrador',
+          photoURL: user.photoURL
+        });
+        setIsAdmin(true);
+        sessionStorage.setItem('barberia_admin_auth', 'true');
+      } else if (!user && sessionStorage.getItem('barberia_admin_auth') !== 'true') {
+        setCurrentUser(null);
+        setIsAdmin(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [config.allowedAdminEmails]);
 
   // Sync with schema.org SEO on load and changes
   useEffect(() => {
@@ -165,9 +209,87 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return false;
   };
 
-  const logoutAdmin = () => {
+  const loginWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      const email = user.email ? user.email.toLowerCase().trim() : '';
+
+      if (!email || !isEmailAuthorized(email)) {
+        await signOut(auth);
+        setIsAdmin(false);
+        setCurrentUser(null);
+        sessionStorage.removeItem('barberia_admin_auth');
+        return {
+          success: false,
+          error: `Acceso Denegado: El correo "${user.email || 'desconocido'}" no está en la lista de administradores autorizados.`
+        };
+      }
+
+      const adminUser: AdminUser = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || 'Administrador',
+        photoURL: user.photoURL
+      };
+
+      setCurrentUser(adminUser);
+      setIsAdmin(true);
+      sessionStorage.setItem('barberia_admin_auth', 'true');
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error al iniciar sesión con Google:', error);
+      if (error?.code === 'auth/popup-closed-by-user') {
+        return { success: false, error: 'Inicio de sesión cancelado (ventana emergente cerrada).' };
+      }
+      if (error?.code === 'auth/unauthorized-domain') {
+        return {
+          success: false,
+          error: 'Dominio no autorizado en Firebase. Añade el dominio en Firebase Console > Authentication > Settings > Authorized domains.'
+        };
+      }
+      return {
+        success: false,
+        error: error?.message || 'Error al autenticar con Google Firebase.'
+      };
+    }
+  };
+
+  const logoutAdmin = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn('Firebase signout warning', e);
+    }
     setIsAdmin(false);
+    setCurrentUser(null);
     sessionStorage.removeItem('barberia_admin_auth');
+  };
+
+  const addAllowedAdminEmail = (email: string) => {
+    const clean = email.toLowerCase().trim();
+    if (!clean) return;
+    const currentList = config.allowedAdminEmails || ['informaticasur@gmail.com'];
+    if (!currentList.some((e) => e.toLowerCase().trim() === clean)) {
+      updateConfig({
+        allowedAdminEmails: [...currentList, clean]
+      });
+    }
+  };
+
+  const removeAllowedAdminEmail = (email: string) => {
+    const clean = email.toLowerCase().trim();
+    const currentList = config.allowedAdminEmails || ['informaticasur@gmail.com'];
+    // Keep at least informaticasur@gmail.com
+    const updated = currentList.filter((e) => e.toLowerCase().trim() !== clean);
+    updateConfig({
+      allowedAdminEmails: updated.length > 0 ? updated : ['informaticasur@gmail.com']
+    });
+  };
+
+  const saveFirebaseCustomConfig = (fbConfig: FirebaseCustomConfig) => {
+    updateConfig({ firebaseConfig: fbConfig });
+    initFirebase(fbConfig);
   };
 
   const updateConfig = (newConfig: Partial<BarberShopConfig>) => {
@@ -414,13 +536,19 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         reviews,
         promos,
         isAdmin,
+        currentUser,
         clientPhone,
         activeNotification,
         setClientPhone,
         loginAdmin,
         verifyPin: loginAdmin,
+        loginWithGoogle,
         logoutAdmin,
         updateConfig,
+        addAllowedAdminEmail,
+        removeAllowedAdminEmail,
+        isEmailAuthorized,
+        saveFirebaseCustomConfig,
         addAppointment,
         updateAppointmentStatus,
         cancelAppointment,

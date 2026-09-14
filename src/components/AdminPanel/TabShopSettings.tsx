@@ -7,6 +7,7 @@ import { SectionGeneralInfo } from './ShopSettings/SectionGeneralInfo';
 import { SectionContactAddress } from './ShopSettings/SectionContactAddress';
 import { SectionSocialMedia } from './ShopSettings/SectionSocialMedia';
 import { SectionMusicSettings } from './ShopSettings/SectionMusicSettings';
+import { SectionAuthorizedEmails } from './ShopSettings/SectionAuthorizedEmails';
 
 export const TabShopSettings: React.FC = () => {
   const { config, updateConfig } = useBarber();
@@ -64,6 +65,9 @@ export const TabShopSettings: React.FC = () => {
 
       {/* 1. General Info, Shop Name, Slogan & Logo */}
       <SectionGeneralInfo formData={formData} setFormData={setFormData} />
+
+      {/* 2. Security & Authorized Admin Google Accounts */}
+      <SectionAuthorizedEmails formData={formData} setFormData={setFormData} />
 
       {/* 4 & 5. Contact Channels, PIN, Schedule text & Physical GPS Address */}
       <SectionContactAddress formData={formData} setFormData={setFormData} />

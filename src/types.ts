@@ -151,6 +151,26 @@ export interface BarberShopConfig {
   subheadlineColorTheme?: SubheadlineColorTheme;
   subheadlineCustomColor?: string;
   subheadlineSize?: SubheadlineSize;
+
+  // Firebase Auth & Admin Access Security
+  allowedAdminEmails: string[];
+  firebaseConfig?: FirebaseCustomConfig;
+}
+
+export interface AdminUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+}
+
+export interface FirebaseCustomConfig {
+  apiKey?: string;
+  authDomain?: string;
+  projectId?: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
 }
 
 export interface PushPromo {

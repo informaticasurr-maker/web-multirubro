@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useBarber } from '../../context/BarberContext';
 import {
   X,
-  Lock,
   Calendar,
   DollarSign,
   Users,
@@ -14,7 +13,7 @@ import {
   Cloud,
   LogOut,
   ShieldCheck,
-  KeyRound
+  UserCheck
 } from 'lucide-react';
 import { TabAppointments } from './TabAppointments';
 import { TabFinancials } from './TabFinancials';
@@ -25,6 +24,7 @@ import { TabGallery } from './TabGallery';
 import { TabReviews } from './TabReviews';
 import { TabShopSettings } from './TabShopSettings';
 import { TabDriveAndSeo } from './TabDriveAndSeo';
+import { AdminLoginScreen } from './AdminLoginScreen';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -37,27 +37,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   onClose,
   initialTab = 'appointments'
 }) => {
-  const { isAdmin, verifyPin, logoutAdmin, appointments, config } = useBarber();
+  const { isAdmin, currentUser, logoutAdmin, appointments, config } = useBarber();
 
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState(false);
 
   if (!isOpen) return null;
 
   const pendingCount = appointments.filter((a) => a.status === 'pendiente').length;
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const ok = verifyPin(pinInput);
-    if (!ok) {
-      setPinError(true);
-      setPinInput('');
-    } else {
-      setPinError(false);
-      setPinInput('');
-    }
-  };
 
   const tabs = [
     {
@@ -86,34 +72,44 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Header */}
-        <div className="px-6 py-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+        <div className="px-5 sm:px-6 py-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center flex-shrink-0">
               <ShieldCheck className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black text-white font-['Syne']">
+                <h2 className="text-base sm:text-lg font-black text-white font-['Syne'] truncate">
                   Panel de Control Barbería
                 </h2>
-                <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-mono font-bold">
+                <span className="hidden sm:inline-block text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-mono font-bold truncate max-w-[150px]">
                   {config.shopName}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
-                Administrador: <strong className="text-slate-200">{config.adminName}</strong>
-              </p>
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 truncate">
+                {currentUser ? (
+                  <span className="flex items-center gap-1 text-slate-300 font-medium">
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{currentUser.displayName || currentUser.email}</span>
+                    <span className="text-[10px] text-emerald-400 font-mono hidden md:inline">({currentUser.email})</span>
+                  </span>
+                ) : (
+                  <span>
+                    Administrador: <strong className="text-slate-200">{config.adminName}</strong>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {isAdmin && (
               <button
                 onClick={logoutAdmin}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
                 title="Cerrar sesión de administrador"
               >
-                <LogOut className="w-3.5 h-3.5" />
+                <LogOut className="w-3.5 h-3.5 text-amber-400" />
                 <span className="hidden sm:inline">Cerrar Sesión</span>
               </button>
             )}
@@ -128,55 +124,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
         {/* Body */}
         {!isAdmin ? (
-          /* PIN Login Screen */
-          <div className="flex-1 flex items-center justify-center p-6">
-            <div className="max-w-sm w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-6 text-center space-y-5 shadow-xl">
-              <div className="w-14 h-14 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto">
-                <Lock className="w-7 h-7" />
-              </div>
-
-              <div>
-                <h3 className="text-xl font-bold text-white font-['Syne']">Acceso Administrador</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Ingresa tu PIN de seguridad para gestionar citas, ingresos y configuración del local.
-                </p>
-              </div>
-
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="relative">
-                  <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="password"
-                    maxLength={8}
-                    autoFocus
-                    placeholder="PIN (por defecto: 1234)"
-                    value={pinInput}
-                    onChange={(e) => setPinInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-center text-white pl-9 pr-3 py-3 rounded-xl text-sm font-mono tracking-widest focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                {pinError && (
-                  <p className="text-xs text-red-400 font-semibold animate-shake">
-                    PIN incorrecto. Intenta con "1234".
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg shadow-amber-500/20 cursor-pointer"
-                >
-                  Ingresar al Panel
-                </button>
-              </form>
-
-              <div className="text-[11px] text-slate-500">
-                <span>PIN por defecto configurado: </span>
-                <code className="text-amber-400 font-mono font-bold">1234</code>
-                <p className="mt-0.5">(Puedes cambiarlo dentro de la pestaña "Datos del Local")</p>
-              </div>
-            </div>
-          </div>
+          <AdminLoginScreen />
         ) : (
           /* Logged In Dashboard with Tabs */
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
