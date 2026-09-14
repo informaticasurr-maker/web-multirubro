@@ -27,7 +27,10 @@ export const SectionAuthorizedEmails: React.FC<SectionAuthorizedEmailsProps> = (
   const [inputError, setInputError] = useState<string | null>(null);
   const [showFirebaseConfig, setShowFirebaseConfig] = useState(false);
 
-  const allowedEmails = formData.allowedAdminEmails || ['informaticasur@gmail.com'];
+  const allowedEmails = formData.allowedAdminEmails || [
+    'informaticasurr@gmail.com',
+    'informaticasur@gmail.com'
+  ];
 
   const handleAddEmail = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,11 +64,13 @@ export const SectionAuthorizedEmails: React.FC<SectionAuthorizedEmailsProps> = (
 
   const handleRemoveEmail = (emailToRemove: string) => {
     const cleanToRemove = emailToRemove.toLowerCase();
-    // Warn or prevent if removing informaticasur@gmail.com
     const updated = allowedEmails.filter((e) => e.toLowerCase() !== cleanToRemove);
     setFormData((prev) => ({
       ...prev,
-      allowedAdminEmails: updated.length > 0 ? updated : ['informaticasur@gmail.com']
+      allowedAdminEmails:
+        updated.length > 0
+          ? updated
+          : ['informaticasurr@gmail.com', 'informaticasur@gmail.com']
     }));
   };
 

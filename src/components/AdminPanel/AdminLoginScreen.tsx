@@ -45,7 +45,10 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
   const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
-  const allowedEmails = config.allowedAdminEmails || ['informaticasur@gmail.com'];
+  const allowedEmails = config.allowedAdminEmails || [
+    'informaticasurr@gmail.com',
+    'informaticasur@gmail.com'
+  ];
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
@@ -57,9 +60,10 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
         setErrorMessage(res.error || 'No fue posible iniciar sesión con Google.');
       } else {
         // Check if user must change password
-        const status = checkUserPasswordStatus(currentUser?.email || 'informaticasur@gmail.com');
+        const activeEmail = currentUser?.email || 'informaticasurr@gmail.com';
+        const status = checkUserPasswordStatus(activeEmail);
         if (!status.isPasswordChanged) {
-          setPendingEmail(currentUser?.email || 'informaticasur@gmail.com');
+          setPendingEmail(activeEmail);
           setMustChangePassword(true);
         } else {
           if (onSuccess) onSuccess();

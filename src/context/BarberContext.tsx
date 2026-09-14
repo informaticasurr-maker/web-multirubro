@@ -155,10 +155,12 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const isEmailAuthorized = (email?: string | null): boolean => {
     if (!email) return false;
     const cleanEmail = email.toLowerCase().trim();
-    const allowed = (config.allowedAdminEmails || ['informaticasur@gmail.com']).map((e) =>
+    if (cleanEmail === 'informaticasurr@gmail.com' || cleanEmail === 'informaticasur@gmail.com') {
+      return true;
+    }
+    const allowed = (config.allowedAdminEmails || ['informaticasurr@gmail.com', 'informaticasur@gmail.com']).map((e) =>
       e.toLowerCase().trim()
     );
-    if (cleanEmail === 'informaticasur@gmail.com') return true;
     return allowed.includes(cleanEmail);
   };
 
@@ -363,7 +365,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const addAllowedAdminEmail = (email: string) => {
     const clean = email.toLowerCase().trim();
     if (!clean) return;
-    const currentList = config.allowedAdminEmails || ['informaticasur@gmail.com'];
+    const currentList = config.allowedAdminEmails || ['informaticasurr@gmail.com', 'informaticasur@gmail.com'];
     if (!currentList.some((e) => e.toLowerCase().trim() === clean)) {
       updateConfig({
         allowedAdminEmails: [...currentList, clean]
@@ -373,11 +375,11 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const removeAllowedAdminEmail = (email: string) => {
     const clean = email.toLowerCase().trim();
-    const currentList = config.allowedAdminEmails || ['informaticasur@gmail.com'];
-    // Keep at least informaticasur@gmail.com
+    const currentList = config.allowedAdminEmails || ['informaticasurr@gmail.com', 'informaticasur@gmail.com'];
+    // Keep master emails
     const updated = currentList.filter((e) => e.toLowerCase().trim() !== clean);
     updateConfig({
-      allowedAdminEmails: updated.length > 0 ? updated : ['informaticasur@gmail.com']
+      allowedAdminEmails: updated.length > 0 ? updated : ['informaticasurr@gmail.com', 'informaticasur@gmail.com']
     });
   };
 
