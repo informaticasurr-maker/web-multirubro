@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   Barber,
   ServiceItem,
@@ -25,7 +25,7 @@ import {
 import { updateBarberShopSchema } from '../utils/seoHelper';
 import { auth, googleProvider, initFirebase, db } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 
 interface BarberContextType {
   config: BarberShopConfig;
@@ -40,6 +40,8 @@ interface BarberContextType {
   currentUser: AdminUser | null;
   clientPhone: string;
   activeNotification: { title: string; message: string } | null;
+  isCloudSynced: boolean;
+  lastCloudSyncTime: string | null;
 
   // Actions
   setClientPhone: (phone: string) => void;
@@ -91,7 +93,7 @@ interface BarberContextType {
   dismissNotification: () => void;
   triggerPushNotification: (title: string, message: string) => void;
 
-  // Backup / Google Drive sync
+  // Backup / Cloud sync
   exportFullBackup: () => string;
   importFullBackup: (jsonString: string) => boolean;
   resetToDefaultData: () => void;
@@ -129,6 +131,15 @@ function saveItem<T>(key: string, value: T): void {
   }
 }
 
+// Clean object to ensure Firestore compatibility (remove undefined values)
+function cleanForFirestore<T>(data: T): T {
+  try {
+    return JSON.parse(JSON.stringify(data));
+  } catch {
+    return data;
+  }
+}
+
 export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [config, setConfig] = useState<BarberShopConfig>(() => getSaved(STORAGE_KEYS.CONFIG, INITIAL_CONFIG));
   const [barbers, setBarbers] = useState<Barber[]>(() => getSaved(STORAGE_KEYS.BARBERS, INITIAL_BARBERS));
@@ -144,12 +155,30 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
 
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+  const [isCloudSynced, setIsCloudSynced] = useState<boolean>(false);
+  const [lastCloudSyncTime, setLastCloudSyncTime] = useState<string | null>(null);
 
   const [clientPhone, setClientPhoneState] = useState<string>(() => {
     return localStorage.getItem(STORAGE_KEYS.CLIENT_PHONE) || '';
   });
 
   const [activeNotification, setActiveNotification] = useState<{ title: string; message: string } | null>(null);
+
+  // Helper function to push updates to Firebase Firestore Cloud
+  const saveToCloud = async (partialData: Record<string, any>) => {
+    try {
+      const globalDocRef = doc(db, 'barberia', 'global_data');
+      const payload = cleanForFirestore({
+        ...partialData,
+        lastUpdated: new Date().toISOString()
+      });
+      await setDoc(globalDocRef, payload, { merge: true });
+      setIsCloudSynced(true);
+      setLastCloudSyncTime(new Date().toLocaleTimeString());
+    } catch (e) {
+      console.warn('Nota de sincronización en Firestore Cloud:', e);
+    }
+  };
 
   // Helper to check if an email address is allowed as administrator
   const isEmailAuthorized = (email?: string | null): boolean => {
@@ -163,6 +192,59 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     );
     return allowed.includes(cleanEmail);
   };
+
+  // Listen to Firebase Real-time Firestore Cloud Data
+  useEffect(() => {
+    try {
+      const globalDocRef = doc(db, 'barberia', 'global_data');
+      const unsubscribe = onSnapshot(
+        globalDocRef,
+        (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data) {
+              if (data.config && typeof data.config === 'object') {
+                setConfig((prev) => ({ ...prev, ...data.config }));
+              }
+              if (data.barbers && Array.isArray(data.barbers)) setBarbers(data.barbers);
+              if (data.services && Array.isArray(data.services)) setServices(data.services);
+              if (data.appointments && Array.isArray(data.appointments)) setAppointments(data.appointments);
+              if (data.stories && Array.isArray(data.stories)) setStories(data.stories);
+              if (data.gallery && Array.isArray(data.gallery)) setGallery(data.gallery);
+              if (data.reviews && Array.isArray(data.reviews)) setReviews(data.reviews);
+              if (data.promos && Array.isArray(data.promos)) setPromos(data.promos);
+              setIsCloudSynced(true);
+              setLastCloudSyncTime(new Date().toLocaleTimeString());
+            }
+          } else {
+            // First time seeding to Firestore Cloud
+            const initialPayload = cleanForFirestore({
+              config,
+              barbers,
+              services,
+              appointments,
+              stories,
+              gallery,
+              reviews,
+              promos,
+              lastUpdated: new Date().toISOString()
+            });
+            setDoc(globalDocRef, initialPayload, { merge: true }).catch((err) =>
+              console.warn('Firestore initial seeding note:', err)
+            );
+            setIsCloudSynced(true);
+          }
+        },
+        (err) => {
+          console.warn('Firestore realtime snapshot note:', err);
+        }
+      );
+
+      return () => unsubscribe();
+    } catch (e) {
+      console.warn('Firestore listener setup note:', e);
+    }
+  }, []);
 
   // Listen to Firebase Auth state
   useEffect(() => {
@@ -190,7 +272,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     updateBarberShopSchema(config, services, barbers, reviews);
   }, [config, services, barbers, reviews]);
 
-  // Persist state changes
+  // Persist state changes to localStorage as offline cache
   useEffect(() => { saveItem(STORAGE_KEYS.CONFIG, config); }, [config]);
   useEffect(() => { saveItem(STORAGE_KEYS.BARBERS, barbers); }, [barbers]);
   useEffect(() => { saveItem(STORAGE_KEYS.SERVICES, services); }, [services]);
@@ -206,7 +288,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const checkUserPasswordStatus = (email?: string | null): { isPasswordChanged: boolean; currentPassword?: string } => {
-    const targetEmail = (email || currentUser?.email || 'informaticasur@gmail.com').toLowerCase().trim();
+    const targetEmail = (email || currentUser?.email || 'informaticasurr@gmail.com').toLowerCase().trim();
     const credentialsMap = config.adminUserCredentials || {};
     const record = credentialsMap[targetEmail];
 
@@ -253,7 +335,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     email: string,
     newPassword: string
   ): Promise<{ success: boolean; error?: string }> => {
-    const cleanEmail = (email || currentUser?.email || 'informaticasur@gmail.com').toLowerCase().trim();
+    const cleanEmail = (email || currentUser?.email || 'informaticasurr@gmail.com').toLowerCase().trim();
     const cleanPass = newPassword.trim();
 
     if (!cleanPass || cleanPass.length < 4) {
@@ -278,21 +360,25 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         [cleanEmail]: updatedRecord
       };
 
-      updateConfig({
+      const newConfigObj = {
+        ...config,
         adminPin: cleanPass,
         adminUserCredentials: updatedMap
-      });
+      };
 
-      // Sync to Firestore cloud database if connected
+      setConfig(newConfigObj);
+      saveToCloud({ config: newConfigObj });
+
+      // Sync to individual Firestore doc for user
       try {
         await setDoc(doc(db, 'admin_users', cleanEmail), updatedRecord, { merge: true });
       } catch (firestoreError) {
-        console.warn('Firestore sync note (local config updated):', firestoreError);
+        console.warn('Firestore admin_user sync note:', firestoreError);
       }
 
       triggerPushNotification(
         '¡Contraseña Personal Guardada! 🔒',
-        `La contraseña de administrador para ${cleanEmail} ha sido configurada y guardada exitosamente.`
+        `La contraseña de administrador para ${cleanEmail} ha sido configurada y guardada en Firebase exitosamente.`
       );
 
       return { success: true };
@@ -376,7 +462,6 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const removeAllowedAdminEmail = (email: string) => {
     const clean = email.toLowerCase().trim();
     const currentList = config.allowedAdminEmails || ['informaticasurr@gmail.com', 'informaticasur@gmail.com'];
-    // Keep master emails
     const updated = currentList.filter((e) => e.toLowerCase().trim() !== clean);
     updateConfig({
       allowedAdminEmails: updated.length > 0 ? updated : ['informaticasurr@gmail.com', 'informaticasur@gmail.com']
@@ -389,7 +474,11 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateConfig = (newConfig: Partial<BarberShopConfig>) => {
-    setConfig((prev) => ({ ...prev, ...newConfig }));
+    setConfig((prev) => {
+      const updated = { ...prev, ...newConfig };
+      saveToCloud({ config: updated });
+      return updated;
+    });
   };
 
   const triggerPushNotification = (title: string, message: string) => {
@@ -421,7 +510,11 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       status: 'confirmada'
     };
 
-    setAppointments((prev) => [newAppointment, ...prev]);
+    setAppointments((prev) => {
+      const updated = [newAppointment, ...prev];
+      saveToCloud({ appointments: updated });
+      return updated;
+    });
 
     if (appointmentData.clientPhone) {
       setClientPhone(appointmentData.clientPhone);
@@ -436,9 +529,11 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
-    setAppointments((prev) =>
-      prev.map((apt) => (apt.id === id ? { ...apt, status } : apt))
-    );
+    setAppointments((prev) => {
+      const updated = prev.map((apt) => (apt.id === id ? { ...apt, status } : apt));
+      saveToCloud({ appointments: updated });
+      return updated;
+    });
   };
 
   const cancelAppointment = (id: string) => {
@@ -459,34 +554,48 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const saveBarber = (barber: Barber) => {
     setBarbers((prev) => {
       const index = prev.findIndex((b) => b.id === barber.id);
+      let updated: Barber[];
       if (index >= 0) {
-        const updated = [...prev];
+        updated = [...prev];
         updated[index] = barber;
-        return updated;
+      } else {
+        updated = [...prev, barber];
       }
-      return [...prev, barber];
+      saveToCloud({ barbers: updated });
+      return updated;
     });
   };
 
   const deleteBarber = (id: string) => {
-    setBarbers((prev) => prev.filter((b) => b.id !== id));
+    setBarbers((prev) => {
+      const updated = prev.filter((b) => b.id !== id);
+      saveToCloud({ barbers: updated });
+      return updated;
+    });
   };
 
   // Services Management
   const saveService = (service: ServiceItem) => {
     setServices((prev) => {
       const index = prev.findIndex((s) => s.id === service.id);
+      let updated: ServiceItem[];
       if (index >= 0) {
-        const updated = [...prev];
+        updated = [...prev];
         updated[index] = service;
-        return updated;
+      } else {
+        updated = [...prev, service];
       }
-      return [...prev, service];
+      saveToCloud({ services: updated });
+      return updated;
     });
   };
 
   const deleteService = (id: string) => {
-    setServices((prev) => prev.filter((s) => s.id !== id));
+    setServices((prev) => {
+      const updated = prev.filter((s) => s.id !== id);
+      saveToCloud({ services: updated });
+      return updated;
+    });
   };
 
   // Stories Management
@@ -497,17 +606,27 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       createdAt: new Date().toISOString(),
       viewsCount: 1
     };
-    setStories((prev) => [newStory, ...prev]);
+    setStories((prev) => {
+      const updated = [newStory, ...prev];
+      saveToCloud({ stories: updated });
+      return updated;
+    });
   };
 
   const deleteStory = (id: string) => {
-    setStories((prev) => prev.filter((s) => s.id !== id));
+    setStories((prev) => {
+      const updated = prev.filter((s) => s.id !== id);
+      saveToCloud({ stories: updated });
+      return updated;
+    });
   };
 
   const incrementStoryViews = (id: string) => {
-    setStories((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, viewsCount: s.viewsCount + 1 } : s))
-    );
+    setStories((prev) => {
+      const updated = prev.map((s) => (s.id === id ? { ...s, viewsCount: s.viewsCount + 1 } : s));
+      saveToCloud({ stories: updated });
+      return updated;
+    });
   };
 
   // Gallery Management
@@ -517,17 +636,27 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       id: `gal-${Date.now()}`,
       likes: Math.floor(Math.random() * 20) + 5
     };
-    setGallery((prev) => [newItem, ...prev]);
+    setGallery((prev) => {
+      const updated = [newItem, ...prev];
+      saveToCloud({ gallery: updated });
+      return updated;
+    });
   };
 
   const deleteGalleryItem = (id: string) => {
-    setGallery((prev) => prev.filter((g) => g.id !== id));
+    setGallery((prev) => {
+      const updated = prev.filter((g) => g.id !== id);
+      saveToCloud({ gallery: updated });
+      return updated;
+    });
   };
 
   const likeGalleryItem = (id: string) => {
-    setGallery((prev) =>
-      prev.map((g) => (g.id === id ? { ...g, likes: g.likes + 1 } : g))
-    );
+    setGallery((prev) => {
+      const updated = prev.map((g) => (g.id === id ? { ...g, likes: g.likes + 1 } : g));
+      saveToCloud({ gallery: updated });
+      return updated;
+    });
   };
 
   // Reviews Management
@@ -538,24 +667,36 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       date: 'Reciente',
       verified: true
     };
-    setReviews((prev) => [newReview, ...prev]);
+    setReviews((prev) => {
+      const updated = [newReview, ...prev];
+      saveToCloud({ reviews: updated });
+      return updated;
+    });
     triggerPushNotification('¡Nueva Reseña Recibida! ⭐', `${reviewData.clientName} ha dejado una calificación de ${reviewData.rating} estrellas.`);
   };
 
   const toggleHighlightReview = (id: string) => {
-    setReviews((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, highlighted: !r.highlighted } : r))
-    );
+    setReviews((prev) => {
+      const updated = prev.map((r) => (r.id === id ? { ...r, highlighted: !r.highlighted } : r));
+      saveToCloud({ reviews: updated });
+      return updated;
+    });
   };
 
   const toggleVerifyReview = (id: string) => {
-    setReviews((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, verified: !r.verified } : r))
-    );
+    setReviews((prev) => {
+      const updated = prev.map((r) => (r.id === id ? { ...r, verified: !r.verified } : r));
+      saveToCloud({ reviews: updated });
+      return updated;
+    });
   };
 
   const deleteReview = (id: string) => {
-    setReviews((prev) => prev.filter((r) => r.id !== id));
+    setReviews((prev) => {
+      const updated = prev.filter((r) => r.id !== id);
+      saveToCloud({ reviews: updated });
+      return updated;
+    });
   };
 
   // Promos Management
@@ -565,15 +706,23 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       id: `promo-${Date.now()}`,
       date: 'Ahora'
     };
-    setPromos((prev) => [newPromo, ...prev]);
+    setPromos((prev) => {
+      const updated = [newPromo, ...prev];
+      saveToCloud({ promos: updated });
+      return updated;
+    });
     triggerPushNotification(promoData.title, promoData.message);
   };
 
   const deletePromo = (id: string) => {
-    setPromos((prev) => prev.filter((p) => p.id !== id));
+    setPromos((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      saveToCloud({ promos: updated });
+      return updated;
+    });
   };
 
-  // Backup & Google Drive Sync
+  // Backup & Cloud Sync
   const exportFullBackup = (): string => {
     const backupData = {
       version: '1.0',
@@ -602,6 +751,18 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (data.gallery) setGallery(data.gallery);
       if (data.reviews) setReviews(data.reviews);
       if (data.promos) setPromos(data.promos);
+
+      saveToCloud({
+        config: data.config,
+        barbers: data.barbers,
+        services: data.services,
+        appointments: data.appointments,
+        stories: data.stories,
+        gallery: data.gallery,
+        reviews: data.reviews,
+        promos: data.promos
+      });
+
       return true;
     } catch (e) {
       console.error('Error importing backup:', e);
@@ -618,6 +779,17 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setGallery(INITIAL_GALLERY);
     setReviews(INITIAL_REVIEWS);
     setPromos(INITIAL_PROMOS);
+
+    saveToCloud({
+      config: INITIAL_CONFIG,
+      barbers: INITIAL_BARBERS,
+      services: INITIAL_SERVICES,
+      appointments: INITIAL_APPOINTMENTS,
+      stories: INITIAL_STORIES,
+      gallery: INITIAL_GALLERY,
+      reviews: INITIAL_REVIEWS,
+      promos: INITIAL_PROMOS
+    });
   };
 
   return (
@@ -635,6 +807,8 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         currentUser,
         clientPhone,
         activeNotification,
+        isCloudSynced,
+        lastCloudSyncTime,
         setClientPhone,
         loginAdmin,
         verifyPin: loginAdmin,

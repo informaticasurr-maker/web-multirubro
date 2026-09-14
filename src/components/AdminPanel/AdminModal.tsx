@@ -44,7 +44,9 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     logoutAdmin,
     appointments,
     config,
-    checkUserPasswordStatus
+    checkUserPasswordStatus,
+    isCloudSynced,
+    lastCloudSyncTime
   } = useBarber();
 
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -116,6 +118,15 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {isCloudSynced && (
+              <span
+                className="hidden sm:flex items-center gap-1.5 text-[11px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-2.5 py-1 rounded-xl font-medium"
+                title={lastCloudSyncTime ? `Última sincronización con la nube: ${lastCloudSyncTime}` : 'Sincronizado en tiempo real con Firebase'}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>En la Nube</span>
+              </span>
+            )}
             {isAdmin && !mustChangePassword && (
               <button
                 onClick={() => setForceShowPasswordChange(true)}
