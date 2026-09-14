@@ -13,7 +13,8 @@ import {
   Cloud,
   LogOut,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Store
 } from 'lucide-react';
 import { TabAppointments } from './TabAppointments';
 import { TabFinancials } from './TabFinancials';
@@ -26,6 +27,7 @@ import { TabShopSettings } from './TabShopSettings';
 import { TabDriveAndSeo } from './TabDriveAndSeo';
 import { AdminLoginScreen } from './AdminLoginScreen';
 import { AdminPasswordSetupModal } from './AdminPasswordSetupModal';
+import { ShopSwitcherModal } from './ShopSwitcherModal';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -46,11 +48,14 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     config,
     checkUserPasswordStatus,
     isCloudSynced,
-    lastCloudSyncTime
+    lastCloudSyncTime,
+    currentShopSlug,
+    availableShops
   } = useBarber();
 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [forceShowPasswordChange, setForceShowPasswordChange] = useState(false);
+  const [isShopSwitcherOpen, setIsShopSwitcherOpen] = useState(false);
 
   if (!isOpen) return null;
 
@@ -118,9 +123,21 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setIsShopSwitcherOpen(true)}
+                className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+                title="Cambiar de negocio o crear una nueva barbería"
+              >
+                <Store className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden md:inline font-bold">Mis Barberías ({availableShops.length})</span>
+                <span className="md:hidden font-bold">Locales</span>
+              </button>
+            )}
             {isCloudSynced && (
               <span
-                className="hidden sm:flex items-center gap-1.5 text-[11px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-2.5 py-1 rounded-xl font-medium"
+                className="hidden lg:flex items-center gap-1.5 text-[11px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-2.5 py-1 rounded-xl font-medium"
                 title={lastCloudSyncTime ? `Última sincronización con la nube: ${lastCloudSyncTime}` : 'Sincronizado en tiempo real con Firebase'}
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -211,6 +228,12 @@ export const AdminModal: React.FC<AdminModalProps> = ({
             </div>
           </div>
         )}
+
+        {/* Multi-Shop Switcher & Creator Modal */}
+        <ShopSwitcherModal
+          isOpen={isShopSwitcherOpen}
+          onClose={() => setIsShopSwitcherOpen(false)}
+        />
       </div>
     </div>
   );

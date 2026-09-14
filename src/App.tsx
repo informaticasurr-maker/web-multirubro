@@ -34,8 +34,11 @@ const BarberApp: React.FC = () => {
       if (
         pathname === '/admin' ||
         pathname.startsWith('/admin') ||
+        pathname.endsWith('/admin') ||
+        pathname.includes('/admin') ||
         hash === '#admin' ||
-        hash.startsWith('#/admin')
+        hash.startsWith('#/admin') ||
+        hash.includes('admin')
       ) {
         setIsAdminOpen(true);
       }
@@ -53,13 +56,12 @@ const BarberApp: React.FC = () => {
 
   const handleCloseAdmin = () => {
     setIsAdminOpen(false);
-    const pathname = window.location.pathname.toLowerCase();
-    const hash = window.location.hash.toLowerCase();
-    if (pathname === '/admin' || pathname.startsWith('/admin')) {
-      window.history.pushState(null, '', '/');
-    } else if (hash === '#admin' || hash.startsWith('#/admin')) {
-      window.history.pushState(null, '', window.location.pathname);
-    }
+    const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
+    const parts = pathname.split('/');
+    const currentSlug = parts[0] && parts[0] !== 'admin' ? parts[0] : '';
+
+    const targetUrl = currentSlug ? `/${currentSlug}` : '/';
+    window.history.pushState(null, '', targetUrl);
   };
 
   // Hook to handle hardware/browser Back button and navigate to previous screen without exiting to desktop
