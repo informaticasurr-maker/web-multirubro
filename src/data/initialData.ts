@@ -21,7 +21,7 @@ export const INITIAL_CONFIG: BarberShopConfig = {
   facebookUrl: "https://facebook.com/thegentlemansblade",
   email: "contacto@gentlemansblade.com",
   openingHoursText: "Lunes a Sábado: 09:00 a 21:00 hs | Domingos: 11:00 a 18:00 hs",
-  logoUrl: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=160&auto=format&fit=crop&q=80",
+  logoUrl: "/barber-logo.png",
   coverImageUrl: "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1600&auto=format&fit=crop&q=80",
   currencySymbol: "$",
   adminPin: "131882",

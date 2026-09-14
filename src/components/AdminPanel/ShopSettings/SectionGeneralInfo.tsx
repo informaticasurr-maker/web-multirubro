@@ -11,6 +11,11 @@ interface SectionGeneralInfoProps {
 
 const LOGO_PRESETS = [
   {
+    name: 'Logo Oficial Vintage',
+    url: '/barber-logo.png',
+    description: 'Emblema circular clásico Barbería & Peluquería'
+  },
+  {
     name: 'Tijeras por defecto',
     url: '',
     description: 'Icono vectorial estilizado en oro'

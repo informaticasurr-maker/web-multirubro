@@ -1,6 +1,37 @@
 import { BarberShopConfig, ServiceItem, Barber, ReviewItem } from '../types';
 
 /**
+ * Updates dynamic favicon and browser tab title for the current Barber Shop
+ */
+export function updateDocumentHead(config: BarberShopConfig) {
+  if (typeof document === 'undefined') return;
+
+  // Update browser tab title
+  if (config.shopName) {
+    document.title = `${config.shopName} | Turnos en Vivo`;
+  }
+
+  // Update Favicon in browser tabs
+  const iconHref = config.logoUrl && config.logoUrl.trim().length > 0 ? config.logoUrl : '/favicon.png';
+  
+  let iconLink = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
+  if (!iconLink) {
+    iconLink = document.createElement('link');
+    iconLink.rel = 'icon';
+    document.head.appendChild(iconLink);
+  }
+  iconLink.href = iconHref;
+
+  let appleTouchLink = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement | null;
+  if (!appleTouchLink) {
+    appleTouchLink = document.createElement('link');
+    appleTouchLink.rel = 'apple-touch-icon';
+    document.head.appendChild(appleTouchLink);
+  }
+  appleTouchLink.href = iconHref;
+}
+
+/**
  * Injects or updates Schema.org JSON-LD structured data for BarberShop
  * to maximize Google Local SEO, Google Maps proximity ranking, and Rich Snippets.
  */
@@ -10,6 +41,8 @@ export function updateBarberShopSchema(
   barbers: Barber[],
   reviews: ReviewItem[]
 ) {
+  updateDocumentHead(config);
+
   const scriptId = 'barbershop-jsonld-schema';
   let scriptElement = document.getElementById(scriptId) as HTMLScriptElement | null;
 
@@ -30,7 +63,7 @@ export function updateBarberShopSchema(
     '@type': 'BarberShop',
     name: config.shopName,
     description: config.slogan,
-    image: [config.coverImageUrl || config.logoUrl],
+    image: [config.coverImageUrl || config.logoUrl || '/barber-logo.png'],
     telephone: config.adminPhone,
     priceRange: '$$',
     address: {
