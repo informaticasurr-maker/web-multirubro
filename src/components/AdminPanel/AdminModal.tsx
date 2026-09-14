@@ -25,6 +25,7 @@ import { TabReviews } from './TabReviews';
 import { TabShopSettings } from './TabShopSettings';
 import { TabDriveAndSeo } from './TabDriveAndSeo';
 import { AdminLoginScreen } from './AdminLoginScreen';
+import { AdminPasswordSetupModal } from './AdminPasswordSetupModal';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -37,11 +38,23 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   onClose,
   initialTab = 'appointments'
 }) => {
-  const { isAdmin, currentUser, logoutAdmin, appointments, config } = useBarber();
+  const {
+    isAdmin,
+    currentUser,
+    logoutAdmin,
+    appointments,
+    config,
+    checkUserPasswordStatus
+  } = useBarber();
 
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [forceShowPasswordChange, setForceShowPasswordChange] = useState(false);
 
   if (!isOpen) return null;
+
+  const activeEmail = currentUser?.email || 'informaticasurr@gmail.com';
+  const passwordStatus = checkUserPasswordStatus(activeEmail);
+  const mustChangePassword = !passwordStatus.isPasswordChanged;
 
   const pendingCount = appointments.filter((a) => a.status === 'pendiente').length;
 
@@ -103,6 +116,15 @@ export const AdminModal: React.FC<AdminModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {isAdmin && !mustChangePassword && (
+              <button
+                onClick={() => setForceShowPasswordChange(true)}
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-amber-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border border-slate-700/60"
+                title="Cambiar Contraseña de Administrador"
+              >
+                <span className="hidden sm:inline">Cambiar Clave</span>
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={logoutAdmin}
@@ -125,6 +147,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         {/* Body */}
         {!isAdmin ? (
           <AdminLoginScreen />
+        ) : mustChangePassword || forceShowPasswordChange ? (
+          <AdminPasswordSetupModal
+            email={activeEmail}
+            onCompleted={() => setForceShowPasswordChange(false)}
+          />
         ) : (
           /* Logged In Dashboard with Tabs */
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
