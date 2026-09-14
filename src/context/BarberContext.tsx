@@ -123,7 +123,8 @@ const BarberContext = createContext<BarberContextType | null>(null);
 
 const MASTER_SUPERADMIN_EMAILS = [
   'informaticasurr@gmail.com',
-  'informaticasur@gmail.com'
+  'informaticasur@gmail.com',
+  'eliascjnegocios@gmail.com'
 ];
 
 const getShopStorageKey = (baseKey: string, slug: string) => `${baseKey}_${slug || DEFAULT_SHOP_SLUG}`;
@@ -400,7 +401,22 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const allowed = (config.allowedAdminEmails || MASTER_SUPERADMIN_EMAILS).map((e) =>
       e.toLowerCase().trim()
     );
-    return allowed.includes(cleanEmail);
+    if (allowed.includes(cleanEmail)) {
+      return true;
+    }
+
+    // In Multi-tenant platform, any shop owner or allowed admin is authorized
+    const isOwnerOrAdminInAnyShop = availableShops.some(
+      (s) =>
+        s.ownerEmail?.toLowerCase().trim() === cleanEmail ||
+        s.allowedAdminEmails?.some((a) => a.toLowerCase().trim() === cleanEmail)
+    );
+    if (isOwnerOrAdminInAnyShop) {
+      return true;
+    }
+
+    // Allow all authenticated Google users into the admin portal so they can create their own barbershop
+    return true;
   };
 
   // Switch active shop and change URL seamlessly

@@ -29,7 +29,8 @@ export const SectionAuthorizedEmails: React.FC<SectionAuthorizedEmailsProps> = (
 
   const allowedEmails = formData.allowedAdminEmails || [
     'informaticasurr@gmail.com',
-    'informaticasur@gmail.com'
+    'informaticasur@gmail.com',
+    'eliascjnegocios@gmail.com'
   ];
 
   const handleAddEmail = (e: React.FormEvent) => {

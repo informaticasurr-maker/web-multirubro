@@ -43,7 +43,7 @@ export const INITIAL_CONFIG: BarberShopConfig = {
   subheadlineText: "Cortes de alta precisión, afeitados clásicos y estilo que impone presencia. Selecciona a tu barbero de confianza, consulta los turnos disponibles calculados al instante y recibe tu confirmación directa en WhatsApp.",
   subheadlineColorTheme: "slate-300",
   subheadlineCustomColor: "#cbd5e1",
-  allowedAdminEmails: ["informaticasurr@gmail.com", "informaticasur@gmail.com"]
+  allowedAdminEmails: ["informaticasurr@gmail.com", "informaticasur@gmail.com", "eliascjnegocios@gmail.com"]
 };
 
 export const INITIAL_BARBERS: Barber[] = [
