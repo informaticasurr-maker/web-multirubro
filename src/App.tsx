@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarberProvider } from './context/BarberContext';
 import { MusicProvider, useMusic } from './context/MusicContext';
 import { Header } from './components/Header';
@@ -25,6 +25,42 @@ const BarberApp: React.FC = () => {
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
   const [bookingStep, setBookingStep] = useState<number>(1);
   const [preselectedBarberId, setPreselectedBarberId] = useState<string | undefined>(undefined);
+
+  // Detect /admin and /#admin URL route to open Admin Modal automatically
+  useEffect(() => {
+    const checkRoute = () => {
+      const pathname = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (
+        pathname === '/admin' ||
+        pathname.startsWith('/admin') ||
+        hash === '#admin' ||
+        hash.startsWith('#/admin')
+      ) {
+        setIsAdminOpen(true);
+      }
+    };
+
+    checkRoute();
+    window.addEventListener('popstate', checkRoute);
+    window.addEventListener('hashchange', checkRoute);
+
+    return () => {
+      window.removeEventListener('popstate', checkRoute);
+      window.removeEventListener('hashchange', checkRoute);
+    };
+  }, []);
+
+  const handleCloseAdmin = () => {
+    setIsAdminOpen(false);
+    const pathname = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    if (pathname === '/admin' || pathname.startsWith('/admin')) {
+      window.history.pushState(null, '', '/');
+    } else if (hash === '#admin' || hash.startsWith('#/admin')) {
+      window.history.pushState(null, '', window.location.pathname);
+    }
+  };
 
   // Hook to handle hardware/browser Back button and navigate to previous screen without exiting to desktop
   const { showExitToast } = useAppBackNavigation({
@@ -130,7 +166,7 @@ const BarberApp: React.FC = () => {
       {/* Admin Panel Modal */}
       <AdminModal
         isOpen={isAdminOpen}
-        onClose={() => setIsAdminOpen(false)}
+        onClose={handleCloseAdmin}
         initialTab={adminInitialTab}
       />
 

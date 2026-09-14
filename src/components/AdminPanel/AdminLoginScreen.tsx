@@ -7,10 +7,12 @@ import {
   Lock,
   Sparkles,
   UserCheck,
-  ExternalLink,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Settings
+  Eye,
+  EyeOff,
+  ArrowRight
 } from 'lucide-react';
 
 interface AdminLoginScreenProps {
@@ -18,7 +20,14 @@ interface AdminLoginScreenProps {
 }
 
 export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess }) => {
-  const { loginWithGoogle, verifyPin, config, isEmailAuthorized } = useBarber();
+  const {
+    loginWithGoogle,
+    verifyPin,
+    config,
+    currentUser,
+    updateAdminUserPassword,
+    checkUserPasswordStatus
+  } = useBarber();
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -26,6 +35,15 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [showEmailsInfo, setShowEmailsInfo] = useState(false);
+
+  // First-time password change wizard state
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState<string>('informaticasur@gmail.com');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   const allowedEmails = config.allowedAdminEmails || ['informaticasur@gmail.com'];
 
@@ -38,7 +56,14 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
       if (!res.success) {
         setErrorMessage(res.error || 'No fue posible iniciar sesión con Google.');
       } else {
-        if (onSuccess) onSuccess();
+        // Check if user must change password
+        const status = checkUserPasswordStatus(currentUser?.email || 'informaticasur@gmail.com');
+        if (!status.isPasswordChanged) {
+          setPendingEmail(currentUser?.email || 'informaticasur@gmail.com');
+          setMustChangePassword(true);
+        } else {
+          if (onSuccess) onSuccess();
+        }
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'Ocurrió un error inesperado al conectar con Google.');
@@ -55,11 +80,146 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
       setPinInput('');
     } else {
       setPinError(false);
-      setPinInput('');
-      if (onSuccess) onSuccess();
+      // Check if entered pin was default 131882 and password hasn't been changed yet
+      const status = checkUserPasswordStatus(currentUser?.email || 'informaticasur@gmail.com');
+      if (pinInput.trim() === '131882' || !status.isPasswordChanged) {
+        setPendingEmail(currentUser?.email || 'informaticasur@gmail.com');
+        setMustChangePassword(true);
+      } else {
+        setPinInput('');
+        if (onSuccess) onSuccess();
+      }
     }
   };
 
+  const handleSaveNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordChangeError(null);
+
+    if (newPassword.length < 4) {
+      setPasswordChangeError('La contraseña debe contener al menos 4 caracteres.');
+      return;
+    }
+
+    if (newPassword === '131882' || newPassword === '1234') {
+      setPasswordChangeError('Debes elegir una contraseña diferente a la clave por defecto.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordChangeError('Las contraseñas no coinciden. Verifícalas e inténtalo nuevamente.');
+      return;
+    }
+
+    setIsSavingPassword(true);
+    try {
+      const res = await updateAdminUserPassword(pendingEmail, newPassword);
+      if (!res.success) {
+        setPasswordChangeError(res.error || 'Error al guardar la contraseña.');
+      } else {
+        setMustChangePassword(false);
+        if (onSuccess) onSuccess();
+      }
+    } catch (err: any) {
+      setPasswordChangeError(err?.message || 'Error inesperado al guardar contraseña.');
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
+
+  // 1. Mandatory First-time Password Change Screen
+  if (mustChangePassword) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+        <div className="max-w-md w-full bg-slate-900/95 border border-amber-500/40 rounded-3xl p-6 sm:p-8 text-center space-y-6 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+          <div className="w-16 h-16 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
+            <Lock className="w-8 h-8" />
+          </div>
+
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold uppercase tracking-wider mb-2 font-mono">
+              <Sparkles className="w-3.5 h-3.5" /> Primer Ingreso de Administrador
+            </div>
+            <h3 className="text-xl font-black text-white font-['Syne']">
+              Configura tu Contraseña Personal
+            </h3>
+            <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+              Para proteger el panel de administración asociado a tu cuenta de Gmail (
+              <span className="text-amber-300 font-mono font-bold">{pendingEmail}</span>),
+              reemplaza la clave inicial (<code className="text-amber-400">131882</code>) por tu propia contraseña.
+            </p>
+          </div>
+
+          {passwordChangeError && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-3 text-left flex items-start gap-2.5 text-xs text-red-300">
+              <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+              <span>{passwordChangeError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveNewPassword} className="space-y-4 text-left">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Nueva Contraseña / PIN Personal:
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  required
+                  placeholder="Mínimo 4 caracteres"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 text-white pl-4 pr-10 py-3 rounded-xl text-xs font-mono tracking-widest focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Confirma tu Nueva Contraseña:
+              </label>
+              <input
+                type="password"
+                required
+                placeholder="Repite la contraseña"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 text-white px-4 py-3 rounded-xl text-xs font-mono tracking-widest focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSavingPassword}
+              className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs transition shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSavingPassword ? (
+                <span>Guardando en Firebase...</span>
+              ) : (
+                <>
+                  <span>Guardar y Asociar a Gmail</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <p className="text-[10px] text-slate-500 italic">
+            * Esta contraseña se asociará de forma permanente a tu correo de Google y servirá para tus futuros accesos.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Standard Login Screen (Google Sign-In + Fallback PIN)
   return (
     <div className="flex-1 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
       <div className="max-w-md w-full bg-slate-900/90 border border-slate-800/90 rounded-3xl p-6 sm:p-8 text-center space-y-6 shadow-2xl relative overflow-hidden backdrop-blur-xl">
@@ -74,7 +234,7 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
           </div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-semibold mt-3 font-mono">
             <Sparkles className="w-3 h-3" />
-            <span>Acceso Seguro & Restringido</span>
+            <span>Acceso Privado /admin</span>
           </div>
         </div>
 
@@ -171,9 +331,6 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-slate-500 italic">
-                  * Puedes agregar o modificar correos desde la pestaña de configuración del local.
-                </p>
               </div>
             )}
           </div>
@@ -186,12 +343,12 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
           </div>
           <div className="relative flex justify-center text-[10px] uppercase">
             <span className="bg-slate-900 px-3 text-slate-500 font-semibold tracking-wider">
-              O ingresar con clave PIN
+              O ingresar con clave de acceso
             </span>
           </div>
         </div>
 
-        {/* Alternative PIN login */}
+        {/* Alternative PIN / Password login */}
         <div>
           {!showPinFallback ? (
             <button
@@ -199,7 +356,7 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
               className="w-full py-2.5 bg-slate-800/70 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer border border-slate-700/50"
             >
               <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-              <span>Usar PIN de Seguridad ({config.adminPin || '1234'})</span>
+              <span>Ingresar con Contraseña</span>
             </button>
           ) : (
             <form onSubmit={handlePinSubmit} className="space-y-3 animate-in fade-in duration-200">
@@ -207,9 +364,8 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
                 <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="password"
-                  maxLength={8}
                   autoFocus
-                  placeholder="Ingresa PIN (por defecto: 1234)"
+                  placeholder="Ingresa clave (por defecto: 131882)"
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 text-center text-white pl-9 pr-3 py-2.5 rounded-xl text-xs font-mono tracking-widest focus:outline-none focus:border-amber-500"
@@ -218,7 +374,7 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
 
               {pinError && (
                 <p className="text-xs text-red-400 font-semibold animate-shake">
-                  PIN incorrecto. Intenta nuevamente o usa Google.
+                  Clave incorrecta. Intenta con la clave configurada o con tu cuenta de Google.
                 </p>
               )}
 
@@ -234,7 +390,7 @@ export const AdminLoginScreen: React.FC<AdminLoginScreenProps> = ({ onSuccess })
                   type="submit"
                   className="w-2/3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition shadow-md shadow-amber-500/20 cursor-pointer"
                 >
-                  Ingresar con PIN
+                  Ingresar
                 </button>
               </div>
             </form>

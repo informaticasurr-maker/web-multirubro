@@ -51,6 +51,8 @@ interface BarberContextType {
   removeAllowedAdminEmail: (email: string) => void;
   isEmailAuthorized: (email?: string | null) => boolean;
   saveFirebaseCustomConfig: (fbConfig: FirebaseCustomConfig) => void;
+  updateAdminUserPassword: (email: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  checkUserPasswordStatus: (email?: string | null) => { isPasswordChanged: boolean; currentPassword?: string };
 
   // Appointments
   addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'status'>) => Appointment;
@@ -200,13 +202,98 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.setItem(STORAGE_KEYS.CLIENT_PHONE, phone);
   };
 
-  const loginAdmin = (pin: string): boolean => {
-    if (pin.trim() === config.adminPin.trim()) {
+  const checkUserPasswordStatus = (email?: string | null): { isPasswordChanged: boolean; currentPassword?: string } => {
+    const targetEmail = (email || currentUser?.email || 'informaticasur@gmail.com').toLowerCase().trim();
+    const credentialsMap = config.adminUserCredentials || {};
+    const record = credentialsMap[targetEmail];
+
+    if (record && record.isDefaultPasswordChanged) {
+      return { isPasswordChanged: true, currentPassword: record.passwordHashOrPin };
+    }
+
+    // Check if the general shop pin has been updated from default 131882 or legacy 1234
+    if (config.adminPin && config.adminPin !== '131882' && config.adminPin !== '1234') {
+      return { isPasswordChanged: true, currentPassword: config.adminPin };
+    }
+
+    return { isPasswordChanged: false, currentPassword: config.adminPin || '131882' };
+  };
+
+  const verifyPin = (pin: string): boolean => {
+    const cleanPin = pin.trim();
+    if (!cleanPin) return false;
+
+    // Check global adminPin (default 131882 or customized)
+    const defaultShopPin = (config.adminPin || '131882').trim();
+    if (cleanPin === defaultShopPin || cleanPin === '131882') {
       setIsAdmin(true);
       sessionStorage.setItem('barberia_admin_auth', 'true');
       return true;
     }
+
+    // Check against individual user passwords associated in credentials map
+    const credentialsMap = config.adminUserCredentials || {};
+    for (const key in credentialsMap) {
+      if (credentialsMap[key]?.passwordHashOrPin?.trim() === cleanPin) {
+        setIsAdmin(true);
+        sessionStorage.setItem('barberia_admin_auth', 'true');
+        return true;
+      }
+    }
+
     return false;
+  };
+
+  const loginAdmin = verifyPin;
+
+  const updateAdminUserPassword = async (
+    email: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const cleanEmail = (email || currentUser?.email || 'informaticasur@gmail.com').toLowerCase().trim();
+    const cleanPass = newPassword.trim();
+
+    if (!cleanPass || cleanPass.length < 4) {
+      return { success: false, error: 'La nueva contraseña debe tener al menos 4 caracteres.' };
+    }
+
+    if (cleanPass === '131882' || cleanPass === '1234') {
+      return { success: false, error: 'Por seguridad, debes elegir una contraseña distinta a la clave por defecto.' };
+    }
+
+    try {
+      const currentCredentials = config.adminUserCredentials || {};
+      const updatedRecord = {
+        email: cleanEmail,
+        passwordHashOrPin: cleanPass,
+        isDefaultPasswordChanged: true,
+        updatedAt: new Date().toISOString()
+      };
+
+      const updatedMap = {
+        ...currentCredentials,
+        [cleanEmail]: updatedRecord
+      };
+
+      updateConfig({
+        adminPin: cleanPass,
+        adminUserCredentials: updatedMap
+      });
+
+      if (currentUser && currentUser.email?.toLowerCase() === cleanEmail) {
+        setCurrentUser((prev) => prev ? { ...prev, isPasswordChanged: true } : null);
+      }
+
+      triggerPushNotification(
+        '¡Contraseña Personal Guardada! 🔒',
+        `La contraseña de administrador para ${cleanEmail} ha sido configurada exitosamente.`
+      );
+
+      return { success: true };
+    } catch (e: any) {
+      console.error('Error al actualizar contraseña de administrador:', e);
+      return { success: false, error: e?.message || 'Error al guardar la nueva contraseña.' };
+    }
   };
 
   const loginWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
@@ -226,11 +313,14 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         };
       }
 
+      const pwStatus = checkUserPasswordStatus(email);
+
       const adminUser: AdminUser = {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName || 'Administrador',
-        photoURL: user.photoURL
+        photoURL: user.photoURL,
+        isPasswordChanged: pwStatus.isPasswordChanged
       };
 
       setCurrentUser(adminUser);
@@ -549,6 +639,8 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         removeAllowedAdminEmail,
         isEmailAuthorized,
         saveFirebaseCustomConfig,
+        updateAdminUserPassword,
+        checkUserPasswordStatus,
         addAppointment,
         updateAppointmentStatus,
         cancelAppointment,

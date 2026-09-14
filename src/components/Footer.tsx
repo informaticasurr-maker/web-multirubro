@@ -172,13 +172,15 @@ export const Footer: React.FC<FooterProps> = ({ onOpenAdmin, onOpenHistory }) =>
           <p>© {new Date().getFullYear()} {config.shopName}. Todos los derechos reservados.</p>
 
           <div className="flex items-center gap-4">
-            <button
-              onClick={onOpenAdmin}
-              className="text-slate-400 hover:text-amber-400 font-semibold transition cursor-pointer flex items-center gap-1"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>{isAdmin ? 'Panel Administrador (Conectado)' : 'Acceso Administrador'}</span>
-            </button>
+            {isAdmin && (
+              <button
+                onClick={onOpenAdmin}
+                className="text-amber-400 hover:text-amber-300 font-semibold transition cursor-pointer flex items-center gap-1.5 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Panel Administrador (Conectado)</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

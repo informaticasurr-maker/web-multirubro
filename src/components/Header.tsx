@@ -156,24 +156,22 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
 
-            {/* Admin quick toggle badge */}
-            <button
-              id="header-admin-login-btn"
-              onClick={onOpenAdmin}
-              className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs transition cursor-pointer font-medium ${
-                isAdmin
-                  ? 'bg-amber-500 text-slate-950 hover:bg-amber-400'
-                  : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>{isAdmin ? 'Admin Activo' : 'Admin'}</span>
-              {isAdmin && pendingCount > 0 && (
-                <span className="w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
+            {/* Admin quick toggle badge (Only visible when logged in as admin) */}
+            {isAdmin && (
+              <button
+                id="header-admin-login-btn"
+                onClick={onOpenAdmin}
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs transition cursor-pointer font-medium bg-amber-500 text-slate-950 hover:bg-amber-400"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Admin Activo</span>
+                {pendingCount > 0 && (
+                  <span className="w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -24,7 +24,7 @@ export const INITIAL_CONFIG: BarberShopConfig = {
   logoUrl: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=160&auto=format&fit=crop&q=80",
   coverImageUrl: "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=1600&auto=format&fit=crop&q=80",
   currencySymbol: "$",
-  adminPin: "1234",
+  adminPin: "131882",
   seoKeywords: [
     "barberia cerca de mi",
     "corte degradado hombre",

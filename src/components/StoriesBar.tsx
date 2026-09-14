@@ -165,32 +165,34 @@ export const StoriesBar: React.FC<StoriesBarProps> = ({
             ref={scrollContainerRef}
             className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-2 pt-0.5 scrollbar-none snap-x snap-mandatory scroll-smooth touch-pan-x overscroll-x-contain"
           >
-            {/* Facebook-style First Card: "Crear Historia / Subir Estado" */}
-            <button
-              id="stories-facebook-create-card"
-              onClick={onOpenAdminStories}
-              className="w-[105px] sm:w-[125px] md:w-[140px] aspect-[9/14] flex-shrink-0 snap-start rounded-2xl overflow-hidden relative group cursor-pointer border border-dashed border-amber-500/50 hover:border-amber-400 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 transition-all hover:scale-[1.02] shadow-lg flex flex-col justify-between p-2.5"
-            >
-              <div className="w-full flex items-center justify-between">
-                <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wider bg-amber-500/10 px-1.5 py-0.5 rounded">
-                  Publicar
-                </span>
-                <Sparkles className="w-3 h-3 text-amber-400" />
-              </div>
-
-              <div className="flex flex-col items-center justify-center my-auto">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                  <Plus className="w-5 h-5 stroke-[2.5]" />
+            {/* Facebook-style First Card: "Crear Historia / Subir Estado" (Only for Admin) */}
+            {isAdmin && onOpenAdminStories && (
+              <button
+                id="stories-facebook-create-card"
+                onClick={onOpenAdminStories}
+                className="w-[105px] sm:w-[125px] md:w-[140px] aspect-[9/14] flex-shrink-0 snap-start rounded-2xl overflow-hidden relative group cursor-pointer border border-dashed border-amber-500/50 hover:border-amber-400 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 transition-all hover:scale-[1.02] shadow-lg flex flex-col justify-between p-2.5"
+              >
+                <div className="w-full flex items-center justify-between">
+                  <span className="text-[9px] font-bold text-amber-400 uppercase tracking-wider bg-amber-500/10 px-1.5 py-0.5 rounded">
+                    Publicar
+                  </span>
+                  <Sparkles className="w-3 h-3 text-amber-400" />
                 </div>
-                <span className="text-[11px] sm:text-xs font-bold text-white mt-2 group-hover:text-amber-400 transition-colors text-center leading-tight">
-                  {isAdmin ? 'Crear Estado' : 'Subir Noticia'}
-                </span>
-              </div>
 
-              <p className="text-[8px] sm:text-[9px] text-slate-400 text-center truncate">
-                Día • Semana • Mes
-              </p>
-            </button>
+                <div className="flex flex-col items-center justify-center my-auto">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                    <Plus className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <span className="text-[11px] sm:text-xs font-bold text-white mt-2 group-hover:text-amber-400 transition-colors text-center leading-tight">
+                    Crear Estado
+                  </span>
+                </div>
+
+                <p className="text-[8px] sm:text-[9px] text-slate-400 text-center truncate">
+                  Día • Semana • Mes
+                </p>
+              </button>
+            )}
 
             {/* Stories Cards List */}
             {displayedStories.map((story) => {

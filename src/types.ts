@@ -155,6 +155,14 @@ export interface BarberShopConfig {
   // Firebase Auth & Admin Access Security
   allowedAdminEmails: string[];
   firebaseConfig?: FirebaseCustomConfig;
+  adminUserCredentials?: Record<string, UserSecurityRecord>;
+}
+
+export interface UserSecurityRecord {
+  email: string;
+  passwordHashOrPin: string;
+  isDefaultPasswordChanged: boolean;
+  updatedAt: string;
 }
 
 export interface AdminUser {
@@ -162,6 +170,7 @@ export interface AdminUser {
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
+  isPasswordChanged?: boolean;
 }
 
 export interface FirebaseCustomConfig {
