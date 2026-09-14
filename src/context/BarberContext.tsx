@@ -407,6 +407,26 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const switchShop = (slug: string) => {
     const cleanSlug = slugify(slug || DEFAULT_SHOP_SLUG);
     setCurrentShopSlug(cleanSlug);
+
+    // Load cached shop data immediately for instant responsive UI
+    const cachedConfig = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.CONFIG, cleanSlug), INITIAL_CONFIG);
+    const cachedBarbers = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.BARBERS, cleanSlug), INITIAL_BARBERS);
+    const cachedServices = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.SERVICES, cleanSlug), INITIAL_SERVICES);
+    const cachedAppointments = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.APPOINTMENTS, cleanSlug), INITIAL_APPOINTMENTS);
+    const cachedStories = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.STORIES, cleanSlug), INITIAL_STORIES);
+    const cachedGallery = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.GALLERY, cleanSlug), INITIAL_GALLERY);
+    const cachedReviews = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.REVIEWS, cleanSlug), INITIAL_REVIEWS);
+    const cachedPromos = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.PROMOS, cleanSlug), INITIAL_PROMOS);
+
+    setConfig(cachedConfig);
+    setBarbers(cachedBarbers);
+    setServices(cachedServices);
+    setAppointments(cachedAppointments);
+    setStories(cachedStories);
+    setGallery(cachedGallery);
+    setReviews(cachedReviews);
+    setPromos(cachedPromos);
+
     navigateToShop(cleanSlug, isAdmin);
     triggerPushNotification(
       'Cambiando de Barbería 💈',
@@ -414,7 +434,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     );
   };
 
-  // Create a brand new independent shop
+  // Create a brand new independent shop (instant local-first + background cloud sync)
   const createNewShop = async (
     payload: CreateShopPayload
   ): Promise<{ success: boolean; slug?: string; error?: string }> => {
@@ -458,10 +478,17 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         lastUpdated: new Date().toISOString()
       });
 
-      // Save shop document in Firestore
-      await setDoc(doc(db, 'shops', cleanSlug), newShopData, { merge: true });
+      // 1. Immediately cache in localStorage for instant availability
+      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.CONFIG, cleanSlug), newShopConfig);
+      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.BARBERS, cleanSlug), INITIAL_BARBERS);
+      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.SERVICES, cleanSlug), INITIAL_SERVICES);
+      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.APPOINTMENTS, cleanSlug), []);
+      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.STORIES, cleanSlug), INITIAL_STORIES);
+      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.GALLERY, cleanSlug), INITIAL_GALLERY);
+      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.REVIEWS, cleanSlug), INITIAL_REVIEWS);
+      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.PROMOS, cleanSlug), INITIAL_PROMOS);
 
-      // Save in shop registry
+      // 2. Add to registry metadata state
       const metadata: ShopMetadata = {
         slug: cleanSlug,
         name: payload.name.trim(),
@@ -473,15 +500,42 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         lastUpdated: new Date().toISOString()
       };
 
-      await setDoc(doc(db, 'shops_registry', cleanSlug), metadata, { merge: true });
-
       setAvailableShops((prev) => {
         const filtered = prev.filter((s) => s.slug !== cleanSlug);
         return [...filtered, metadata];
       });
 
-      // Switch to new shop
-      switchShop(cleanSlug);
+      // 3. Immediately switch active state and navigate
+      setCurrentShopSlug(cleanSlug);
+      setConfig(newShopConfig);
+      setBarbers(INITIAL_BARBERS);
+      setServices(INITIAL_SERVICES);
+      setAppointments([]);
+      setStories(INITIAL_STORIES);
+      setGallery(INITIAL_GALLERY);
+      setReviews(INITIAL_REVIEWS);
+      setPromos(INITIAL_PROMOS);
+      navigateToShop(cleanSlug, isAdmin);
+
+      // 4. Background non-blocking Firestore Cloud Sync
+      (async () => {
+        try {
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Firestore sync timed out')), 4000)
+          );
+          await Promise.race([
+            Promise.all([
+              setDoc(doc(db, 'shops', cleanSlug), newShopData, { merge: true }),
+              setDoc(doc(db, 'shops_registry', cleanSlug), metadata, { merge: true })
+            ]),
+            timeoutPromise
+          ]);
+          setIsCloudSynced(true);
+          setLastCloudSyncTime(new Date().toLocaleTimeString());
+        } catch (cloudErr) {
+          console.warn('Background Firestore cloud write note:', cloudErr);
+        }
+      })();
 
       triggerPushNotification(
         '¡Nueva Barbería Creada! 🚀',
@@ -503,14 +557,21 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      await deleteDoc(doc(db, 'shops', cleanSlug));
-      await deleteDoc(doc(db, 'shops_registry', cleanSlug));
-
       setAvailableShops((prev) => prev.filter((s) => s.slug !== cleanSlug));
 
       if (currentShopSlug === cleanSlug) {
         switchShop(DEFAULT_SHOP_SLUG);
       }
+
+      // Non-blocking Firestore delete
+      (async () => {
+        try {
+          await deleteDoc(doc(db, 'shops', cleanSlug));
+          await deleteDoc(doc(db, 'shops_registry', cleanSlug));
+        } catch (err) {
+          console.warn('Background Firestore delete note:', err);
+        }
+      })();
 
       return { success: true };
     } catch (e: any) {

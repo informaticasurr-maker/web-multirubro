@@ -94,27 +94,31 @@ export const ShopSwitcherModal: React.FC<ShopSwitcherModalProps> = ({ isOpen, on
     setIsSubmitting(true);
     setFormError(null);
 
-    const result = await createNewShop({
-      name: newShopName.trim(),
-      slug: cleanSlug,
-      phone: newShopPhone.trim() || undefined,
-      slogan: newShopSlogan.trim() || undefined,
-      address: newShopAddress.trim() || undefined,
-      ownerEmail: currentUser?.email || undefined
-    });
+    try {
+      const result = await createNewShop({
+        name: newShopName.trim(),
+        slug: cleanSlug,
+        phone: newShopPhone.trim() || undefined,
+        slogan: newShopSlogan.trim() || undefined,
+        address: newShopAddress.trim() || undefined,
+        ownerEmail: currentUser?.email || undefined
+      });
 
-    setIsSubmitting(false);
-
-    if (result.success) {
-      setNewShopName('');
-      setNewShopSlug('');
-      setNewShopPhone('');
-      setNewShopSlogan('');
-      setNewShopAddress('');
-      setActiveTab('list');
-      onClose();
-    } else {
-      setFormError(result.error || 'Error al crear la barbería.');
+      if (result.success) {
+        setNewShopName('');
+        setNewShopSlug('');
+        setNewShopPhone('');
+        setNewShopSlogan('');
+        setNewShopAddress('');
+        setActiveTab('list');
+        onClose();
+      } else {
+        setFormError(result.error || 'Error al crear la barbería.');
+      }
+    } catch (err: any) {
+      setFormError(err?.message || 'Error inesperado al crear la barbería.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
