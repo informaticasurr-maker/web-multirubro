@@ -9,7 +9,7 @@ export const OFFICIAL_FIREBASE_CONFIG = {
   projectId: "web-multirubro",
   storageBucket: "web-multirubro.firebasestorage.app",
   messagingSenderId: "1026921238822",
-  appId: "1:1026921238822:web:9e82f9886859f7056c71e7"
+  appId: "1:1026921238822:web:7f23715280a64e726c71e7"
 };
 
 // Default configuration with user's official project parameters or custom overrides
