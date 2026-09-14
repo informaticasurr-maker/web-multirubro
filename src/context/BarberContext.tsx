@@ -23,8 +23,9 @@ import {
   INITIAL_PROMOS
 } from '../data/initialData';
 import { updateBarberShopSchema } from '../utils/seoHelper';
-import { auth, googleProvider, initFirebase } from '../lib/firebase';
+import { auth, googleProvider, initFirebase, db } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 interface BarberContextType {
   config: BarberShopConfig;
@@ -280,13 +281,16 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         adminUserCredentials: updatedMap
       });
 
-      if (currentUser && currentUser.email?.toLowerCase() === cleanEmail) {
-        setCurrentUser((prev) => prev ? { ...prev, isPasswordChanged: true } : null);
+      // Sync to Firestore cloud database if connected
+      try {
+        await setDoc(doc(db, 'admin_users', cleanEmail), updatedRecord, { merge: true });
+      } catch (firestoreError) {
+        console.warn('Firestore sync note (local config updated):', firestoreError);
       }
 
       triggerPushNotification(
         '¡Contraseña Personal Guardada! 🔒',
-        `La contraseña de administrador para ${cleanEmail} ha sido configurada exitosamente.`
+        `La contraseña de administrador para ${cleanEmail} ha sido configurada y guardada exitosamente.`
       );
 
       return { success: true };

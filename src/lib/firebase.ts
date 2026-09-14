@@ -1,42 +1,55 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
 import { FirebaseCustomConfig } from '../types';
 
-// Default configuration with environment variables or fallback values
+export const OFFICIAL_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCypDN-qT10QCrXr47ynDnmdX-28AjwuN0",
+  authDomain: "web-multirubro.firebaseapp.com",
+  projectId: "web-multirubro",
+  storageBucket: "web-multirubro.firebasestorage.app",
+  messagingSenderId: "1026921238822",
+  appId: "1:1026921238822:web:9e82f9886859f7056c71e7"
+};
+
+// Default configuration with user's official project parameters or custom overrides
 export const getEffectiveFirebaseConfig = (customConfig?: FirebaseCustomConfig) => {
   const env = (import.meta as any).env || {};
   return {
     apiKey:
       customConfig?.apiKey?.trim() ||
       env.VITE_FIREBASE_API_KEY ||
-      'AIzaSyDemoBarberiaMockKeyForInitialization123',
+      OFFICIAL_FIREBASE_CONFIG.apiKey,
     authDomain:
       customConfig?.authDomain?.trim() ||
       env.VITE_FIREBASE_AUTH_DOMAIN ||
-      'barberia-elite-turnos.firebaseapp.com',
+      OFFICIAL_FIREBASE_CONFIG.authDomain,
     projectId:
       customConfig?.projectId?.trim() ||
       env.VITE_FIREBASE_PROJECT_ID ||
-      'barberia-elite-turnos',
+      OFFICIAL_FIREBASE_CONFIG.projectId,
     storageBucket:
       customConfig?.storageBucket?.trim() ||
       env.VITE_FIREBASE_STORAGE_BUCKET ||
-      'barberia-elite-turnos.appspot.com',
+      OFFICIAL_FIREBASE_CONFIG.storageBucket,
     messagingSenderId:
       customConfig?.messagingSenderId?.trim() ||
       env.VITE_FIREBASE_MESSAGING_SENDER_ID ||
-      '123456789012',
+      OFFICIAL_FIREBASE_CONFIG.messagingSenderId,
     appId:
       customConfig?.appId?.trim() ||
       env.VITE_FIREBASE_APP_ID ||
-      '1:123456789012:web:abcdef123456'
+      OFFICIAL_FIREBASE_CONFIG.appId
   };
 };
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
+let db: Firestore | null = null;
 
-export const initFirebase = (customConfig?: FirebaseCustomConfig): { app: FirebaseApp; auth: Auth } => {
+export const initFirebase = (
+  customConfig?: FirebaseCustomConfig
+): { app: FirebaseApp; auth: Auth; db: Firestore } => {
   const config = getEffectiveFirebaseConfig(customConfig);
 
   try {
@@ -46,21 +59,23 @@ export const initFirebase = (customConfig?: FirebaseCustomConfig): { app: Fireba
       app = getApp();
     }
     auth = getAuth(app);
+    db = getFirestore(app);
   } catch (error) {
     console.error('Error initializing Firebase App:', error);
-    app = initializeApp(config, 'barberia-app-' + Date.now());
+    app = initializeApp(config, 'web-multirubro-' + Date.now());
     auth = getAuth(app);
+    db = getFirestore(app);
   }
 
-  return { app, auth };
+  return { app, auth, db };
 };
 
 // Initial default instance
-const { app: defaultApp, auth: defaultAuth } = initFirebase();
+const { app: defaultApp, auth: defaultAuth, db: defaultDb } = initFirebase();
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
 
-export { defaultApp as app, defaultAuth as auth };
+export { defaultApp as app, defaultAuth as auth, defaultDb as db };
