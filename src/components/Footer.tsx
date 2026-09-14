@@ -13,6 +13,7 @@ import {
   Building2,
   ExternalLink
 } from 'lucide-react';
+import { ShopLogo } from './ShopLogo';
 
 interface FooterProps {
   onOpenAdmin: () => void;
@@ -33,9 +34,12 @@ export const Footer: React.FC<FooterProps> = ({ onOpenAdmin, onOpenHistory }) =>
           {/* Col 1: Shop Brand & Slogan */}
           <div className="space-y-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-black">
-                <Scissors className="w-4 h-4" />
-              </div>
+              <ShopLogo
+                logoUrl={config.logoUrl}
+                shopName={config.shopName}
+                sizeClass="w-9 h-9"
+                iconClass="w-4 h-4 text-amber-400 transform -rotate-45"
+              />
               <span className="text-lg font-black text-white font-['Syne'] tracking-tight">
                 {config.shopName}
               </span>

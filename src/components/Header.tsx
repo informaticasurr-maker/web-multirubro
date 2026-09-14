@@ -18,6 +18,7 @@ import { generateGeneralWhatsAppUrl } from '../utils/whatsappHelper';
 import { useMusic } from '../context/MusicContext';
 import { BarberMusicEqualizer } from './BarberMusicEqualizer';
 import BarberCreativeMenu from './BarberCreativeMenu';
+import { ShopLogo } from './ShopLogo';
 
 interface HeaderProps {
   onOpenBooking: () => void;
@@ -183,11 +184,12 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onScrollToSection('hero')}
           className="flex items-center gap-3 cursor-pointer group"
         >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 p-0.5 shadow-lg shadow-amber-500/10 group-hover:scale-105 transition-transform flex items-center justify-center">
-            <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-              <Scissors className="w-5 h-5 text-amber-400 transform -rotate-45" />
-            </div>
-          </div>
+          <ShopLogo
+            logoUrl={config.logoUrl}
+            shopName={config.shopName}
+            sizeClass="w-10 h-10"
+            containerClass="rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 p-0.5 shadow-lg shadow-amber-500/10 group-hover:scale-105 transition-transform"
+          />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-white font-['Syne']">
