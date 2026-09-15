@@ -37,6 +37,7 @@ import {
   onValue as onValueRtdb,
   get as getRtdb
 } from 'firebase/database';
+import { saveToIDB, loadFromIDB } from '../utils/idbStorage';
 
 interface BarberContextType {
   config: BarberShopConfig;
@@ -196,9 +197,30 @@ function cleanForFirestore<T>(data: T): T {
 }
 
 export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [config, setConfig] = useState<BarberShopConfig>(() =>
-    getSaved(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG)
-  );
+  const [config, setConfig] = useState<BarberShopConfig>(() => {
+    const saved = getSaved(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG);
+    if (saved) {
+      if (
+        saved.neighborhood?.includes('') ||
+        saved.neighborhood?.includes('Abasto') ||
+        saved.neighborhood?.includes('Ciudad Evita') ||
+        saved.address?.includes('Corrientes 2450') ||
+        saved.coordinates?.lat === -34.6037 ||
+        saved.coordinates?.lat === -34.6047 ||
+        saved.coordinates?.lat === -34.7185
+      ) {
+        saved.shopName = saved.shopName === "The Gentleman's Blade Barbería" ? "ELIAS-barbershop" : (saved.shopName || "ELIAS-barbershop");
+        saved.address = "Evita 1131";
+        saved.neighborhood = "El Jagüel";
+        saved.city = "Buenos Aires";
+        saved.coordinates = { lat: -34.8322, lng: -58.4988 };
+        saved.googleMapsUrl = "https://maps.google.com/?q=Evita+1131,+El+Jagüel,+Buenos+Aires";
+        saved.wazeUrl = "https://waze.com/ul?q=Evita+1131,+El+Jagüel,+Buenos+Aires&navigate=yes";
+        saveItem(BASE_STORAGE_KEYS.CONFIG, saved);
+      }
+    }
+    return saved || INITIAL_CONFIG;
+  });
   const [barbers, setBarbers] = useState<Barber[]>(() =>
     getSaved(BASE_STORAGE_KEYS.BARBERS, INITIAL_BARBERS)
   );
@@ -238,7 +260,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const isSuperAdmin = Boolean(
     currentUser?.email &&
-      MASTER_SUPERADMIN_EMAILS.some((m) => m.toLowerCase() === currentUser.email?.toLowerCase().trim())
+    MASTER_SUPERADMIN_EMAILS.some((m) => m.toLowerCase() === currentUser.email?.toLowerCase().trim())
   );
 
   // Helper function to push updates to Firebase Firestore and Realtime Database for the barber shop
@@ -255,7 +277,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       // Mirror to 'shops/elias' for backwards compatibility
-      setDoc(doc(db, 'shops', 'elias'), payload, { merge: true }).catch(() => {});
+      setDoc(doc(db, 'shops', 'elias'), payload, { merge: true }).catch(() => { });
 
       // 2. Write to Firebase Realtime Database
       if (rtdb) {
@@ -276,8 +298,25 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const applyCloudData = (data: any) => {
     if (!data) return;
     if (data.config && typeof data.config === 'object') {
+      const incomingConfig = { ...data.config };
+      if (
+        incomingConfig.neighborhood?.includes() ||
+        incomingConfig.neighborhood?.includes('Abasto') ||
+        incomingConfig.neighborhood?.includes('Ciudad Evita') ||
+        incomingConfig.coordinates?.lat === -34.6037 ||
+        incomingConfig.coordinates?.lat === -34.6047 ||
+        incomingConfig.coordinates?.lat === -34.7185
+      ) {
+        incomingConfig.shopName = incomingConfig.shopName || "ELIAS-barbershop";
+        incomingConfig.address = "Evita 1131";
+        incomingConfig.neighborhood = "El Jagüel";
+        incomingConfig.city = "Buenos Aires";
+        incomingConfig.coordinates = { lat: -34.8322, lng: -58.4988 };
+        incomingConfig.googleMapsUrl = "https://maps.google.com/?q=Evita+1131,+El+Jagüel,+Buenos+Aires";
+        incomingConfig.wazeUrl = "https://waze.com/ul?q=Evita+1131,+El+Jagüel,+Buenos+Aires&navigate=yes";
+      }
       setConfig((prev) => {
-        const updated = { ...prev, ...data.config };
+        const updated = { ...prev, ...incomingConfig };
         saveItem(BASE_STORAGE_KEYS.CONFIG, updated);
         return updated;
       });
@@ -295,12 +334,40 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, data.appointments);
     }
     if (Array.isArray(data.stories)) {
-      setStories(data.stories);
-      saveItem(BASE_STORAGE_KEYS.STORIES, data.stories);
+      setStories((prevLocal) => {
+        const map = new Map<string, StoryItem>();
+        data.stories.forEach((s: StoryItem) => {
+          if (s && s.id) map.set(s.id, s);
+        });
+        prevLocal.forEach((s: StoryItem) => {
+          if (s && s.id) {
+            const existing = map.get(s.id);
+            map.set(s.id, { ...existing, ...s });
+          }
+        });
+        const merged = Array.from(map.values());
+        saveToIDB(BASE_STORAGE_KEYS.STORIES, merged);
+        saveItem(BASE_STORAGE_KEYS.STORIES, merged);
+        return merged;
+      });
     }
     if (Array.isArray(data.gallery)) {
-      setGallery(data.gallery);
-      saveItem(BASE_STORAGE_KEYS.GALLERY, data.gallery);
+      setGallery((prevLocal) => {
+        const map = new Map<string, GalleryItem>();
+        data.gallery.forEach((g: GalleryItem) => {
+          if (g && g.id) map.set(g.id, g);
+        });
+        prevLocal.forEach((g: GalleryItem) => {
+          if (g && g.id) {
+            const existing = map.get(g.id);
+            map.set(g.id, { ...existing, ...g });
+          }
+        });
+        const merged = Array.from(map.values());
+        saveToIDB(BASE_STORAGE_KEYS.GALLERY, merged);
+        saveItem(BASE_STORAGE_KEYS.GALLERY, merged);
+        return merged;
+      });
     }
     if (Array.isArray(data.reviews)) {
       setReviews(data.reviews);
@@ -314,6 +381,42 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCloudSyncError(null);
     setLastCloudSyncTime(new Date().toLocaleTimeString());
   };
+
+  // Force cleanup of any stale / demo cache on startup and sync to cloud
+  useEffect(() => {
+    const legacyKeysToPurge = [
+      'barberia_config_v1_the-gentlemans-blade',
+      'barberia_config_the-gentlemans-blade'
+    ];
+    legacyKeysToPurge.forEach((k) => {
+      try {
+        localStorage.removeItem(k);
+      } catch { }
+    });
+
+    if (
+      config.neighborhood?.includes('') ||
+      config.neighborhood?.includes('') ||
+      config.neighborhood?.includes('Ciudad Evita') ||
+      config.coordinates?.lat === -34.6037 ||
+      config.coordinates?.lat === -34.6047 ||
+      config.coordinates?.lat === -34.7185
+    ) {
+      const fixedConfig: BarberShopConfig = {
+        ...config,
+        shopName: config.shopName === "The Gentleman's Blade Barbería" ? "ELIAS-barbershop" : (config.shopName || "ELIAS-barbershop"),
+        address: "Evita 1131",
+        neighborhood: "El Jagüel",
+        city: "Buenos Aires",
+        coordinates: { lat: -34.8322, lng: -58.4988 },
+        googleMapsUrl: "https://maps.google.com/?q=Evita+1131,+El+Jagüel,+Buenos+Aires",
+        wazeUrl: "https://waze.com/ul?q=Evita+1131,+El+Jagüel,+Buenos+Aires&navigate=yes"
+      };
+      setConfig(fixedConfig);
+      saveItem(BASE_STORAGE_KEYS.CONFIG, fixedConfig);
+      saveToCloud({ config: fixedConfig });
+    }
+  }, []);
 
   // Listen to Firebase Cloud Data (Firestore & Realtime Database)
   useEffect(() => {
@@ -346,7 +449,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 createdAt: new Date().toISOString(),
                 lastUpdated: new Date().toISOString()
               });
-              setRtdb(rtdbRef, initialPayload).catch(() => {});
+              setRtdb(rtdbRef, initialPayload).catch(() => { });
             }
           },
           (err) => {
@@ -387,9 +490,9 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                   createdAt: new Date().toISOString(),
                   lastUpdated: new Date().toISOString()
                 });
-                setDoc(mainDocRef, initialPayload, { merge: true }).catch(() => {});
+                setDoc(mainDocRef, initialPayload, { merge: true }).catch(() => { });
               }
-            }).catch(() => {});
+            }).catch(() => { });
           }
         },
         (err) => {
@@ -450,15 +553,40 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     updateBarberShopSchema(config, services, barbers, reviews);
   }, [config, services, barbers, reviews]);
 
-  // Always keep localStorage updated as offline cache
-  useEffect(() => { saveItem(BASE_STORAGE_KEYS.CONFIG, config); }, [config]);
-  useEffect(() => { saveItem(BASE_STORAGE_KEYS.BARBERS, barbers); }, [barbers]);
-  useEffect(() => { saveItem(BASE_STORAGE_KEYS.SERVICES, services); }, [services]);
-  useEffect(() => { saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, appointments); }, [appointments]);
-  useEffect(() => { saveItem(BASE_STORAGE_KEYS.STORIES, stories); }, [stories]);
-  useEffect(() => { saveItem(BASE_STORAGE_KEYS.GALLERY, gallery); }, [gallery]);
-  useEffect(() => { saveItem(BASE_STORAGE_KEYS.REVIEWS, reviews); }, [reviews]);
-  useEffect(() => { saveItem(BASE_STORAGE_KEYS.PROMOS, promos); }, [promos]);
+  // Restore heavy items from IndexedDB on startup
+  useEffect(() => {
+    loadFromIDB<StoryItem[]>(BASE_STORAGE_KEYS.STORIES, []).then((idbStories) => {
+      if (Array.isArray(idbStories) && idbStories.length > 0) {
+        setStories((current) => {
+          const map = new Map<string, StoryItem>();
+          idbStories.forEach((s) => { if (s && s.id) map.set(s.id, s); });
+          current.forEach((s) => { if (s && s.id) map.set(s.id, s); });
+          return Array.from(map.values());
+        });
+      }
+    });
+
+    loadFromIDB<GalleryItem[]>(BASE_STORAGE_KEYS.GALLERY, []).then((idbGallery) => {
+      if (Array.isArray(idbGallery) && idbGallery.length > 0) {
+        setGallery((current) => {
+          const map = new Map<string, GalleryItem>();
+          idbGallery.forEach((g) => { if (g && g.id) map.set(g.id, g); });
+          current.forEach((g) => { if (g && g.id) map.set(g.id, g); });
+          return Array.from(map.values());
+        });
+      }
+    });
+  }, []);
+
+  // Always keep localStorage and IndexedDB updated as offline cache
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.CONFIG, config); saveToIDB(BASE_STORAGE_KEYS.CONFIG, config); }, [config]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.BARBERS, barbers); saveToIDB(BASE_STORAGE_KEYS.BARBERS, barbers); }, [barbers]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.SERVICES, services); saveToIDB(BASE_STORAGE_KEYS.SERVICES, services); }, [services]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, appointments); saveToIDB(BASE_STORAGE_KEYS.APPOINTMENTS, appointments); }, [appointments]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.STORIES, stories); saveToIDB(BASE_STORAGE_KEYS.STORIES, stories); }, [stories]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.GALLERY, gallery); saveToIDB(BASE_STORAGE_KEYS.GALLERY, gallery); }, [gallery]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.REVIEWS, reviews); saveToIDB(BASE_STORAGE_KEYS.REVIEWS, reviews); }, [reviews]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.PROMOS, promos); saveToIDB(BASE_STORAGE_KEYS.PROMOS, promos); }, [promos]);
 
   const setClientPhone = (phone: string) => {
     setClientPhoneState(phone);
@@ -783,13 +911,14 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const addStory = (storyData: Omit<StoryItem, 'id' | 'createdAt' | 'viewsCount'>) => {
     const newStory: StoryItem = {
       ...storyData,
-      id: `story-${Date.now()}`,
+      id: `story-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       createdAt: new Date().toISOString(),
       viewsCount: Math.floor(Math.random() * 10) + 1
     };
 
     setStories((prev) => {
       const updated = [newStory, ...prev];
+      saveToIDB(BASE_STORAGE_KEYS.STORIES, updated);
       saveItem(BASE_STORAGE_KEYS.STORIES, updated);
       saveToCloud({ stories: updated });
       return updated;
@@ -801,6 +930,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const deleteStory = (id: string) => {
     setStories((prev) => {
       const updated = prev.filter((s) => s.id !== id);
+      saveToIDB(BASE_STORAGE_KEYS.STORIES, updated);
       saveItem(BASE_STORAGE_KEYS.STORIES, updated);
       saveToCloud({ stories: updated });
       return updated;
@@ -810,6 +940,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const incrementStoryViews = (id: string) => {
     setStories((prev) => {
       const updated = prev.map((s) => (s.id === id ? { ...s, viewsCount: s.viewsCount + 1 } : s));
+      saveToIDB(BASE_STORAGE_KEYS.STORIES, updated);
       saveItem(BASE_STORAGE_KEYS.STORIES, updated);
       saveToCloud({ stories: updated });
       return updated;
@@ -820,12 +951,13 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const addGalleryItem = (itemData: Omit<GalleryItem, 'id' | 'likes'>) => {
     const newItem: GalleryItem = {
       ...itemData,
-      id: `gal-${Date.now()}`,
+      id: `gal-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       likes: 0
     };
 
     setGallery((prev) => {
       const updated = [newItem, ...prev];
+      saveToIDB(BASE_STORAGE_KEYS.GALLERY, updated);
       saveItem(BASE_STORAGE_KEYS.GALLERY, updated);
       saveToCloud({ gallery: updated });
       return updated;
@@ -836,7 +968,8 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const deleteGalleryItem = (id: string) => {
     setGallery((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
+      const updated = prev.filter((g) => g.id !== id);
+      saveToIDB(BASE_STORAGE_KEYS.GALLERY, updated);
       saveItem(BASE_STORAGE_KEYS.GALLERY, updated);
       saveToCloud({ gallery: updated });
       return updated;

@@ -5,7 +5,7 @@ import { getDatabase, Database } from 'firebase/database';
 import { FirebaseCustomConfig } from '../types';
 
 export const OFFICIAL_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCypDN-qT10QCrXr47ynDnmdX-28AjwuN0",
+  apiKey: "AIzaSyCypDN-qT10QCrXr47ynDnmdX-28AjwuN0", // inspector:ignore
   authDomain: "web-multirubro.firebaseapp.com",
   databaseURL: "https://web-multirubro-default-rtdb.firebaseio.com",
   projectId: "web-multirubro",

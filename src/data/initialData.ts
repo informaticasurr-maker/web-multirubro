@@ -1,20 +1,20 @@
 import { Barber, ServiceItem, Appointment, StoryItem, GalleryItem, ReviewItem, BarberShopConfig, PushPromo } from '../types';
 
 export const INITIAL_CONFIG: BarberShopConfig = {
-  shopName: "The Gentleman's Blade Barbería",
+  shopName: "ELIAS-barbershop",
   slogan: "Cortes de alta precisión, afeitados clásicos y estilo que impone presencia.",
   adminName: "Carlos 'Don' Mendoza",
   adminPhone: "+54 9 11 4567-8901",
   whatsappNumber: "5491145678901", // WhatsApp ready format
-  address: "Av. Corrientes 2450, Piso 1",
+  address: "Evita 1131",
   city: "Buenos Aires",
-  neighborhood: "Balvanera / Abasto",
+  neighborhood: "El Jagüel",
   coordinates: {
-    lat: -34.6037,
-    lng: -58.3816
+    lat: -34.8322,
+    lng: -58.4988
   },
-  googleMapsUrl: "https://maps.google.com/?q=-34.6037,-58.3816",
-  wazeUrl: "https://waze.com/ul?ll=-34.6037,-58.3816&navigate=yes",
+  googleMapsUrl: "https://maps.google.com/?q=Evita+1131,+El+Jagüel,+Buenos+Aires",
+  wazeUrl: "https://waze.com/ul?q=Evita+1131,+El+Jagüel,+Buenos+Aires&navigate=yes",
   googleBusinessUrl: "https://business.google.com",
   instagramUrl: "https://instagram.com/thegentlemansblade",
   tiktokUrl: "https://tiktok.com/@gentlemansblade",

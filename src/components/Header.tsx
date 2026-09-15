@@ -88,7 +88,7 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
             <span className="hidden sm:flex items-center gap-1.5 text-slate-400">
               <MapPin className="w-3.5 h-3.5 text-amber-500" />
-              {config.address}, {config.neighborhood}
+              {[config.address, config.neighborhood, config.city].filter(Boolean).join(', ')}
             </span>
           </div>
 

@@ -63,10 +63,28 @@ export const GpsLocationSection: React.FC = () => {
     );
   };
 
+  // Build exact location query for Google Maps embed and navigation
+  const fullAddressQuery = [config.address, config.neighborhood, config.city].filter(Boolean).join(', ');
+
+  const mapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(
+    fullAddressQuery || `${config.coordinates.lat},${config.coordinates.lng}`
+  )}&t=&z=16&ie=UTF8&iwloc=&output=embed`;
+
   // Google Maps navigation link
   const googleMapsRouteUrl = userCoords
-    ? `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${config.coordinates.lat},${config.coordinates.lng}`
-    : `https://www.google.com/maps/search/?api=1&query=${config.coordinates.lat},${config.coordinates.lng}`;
+    ? `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${encodeURIComponent(
+        fullAddressQuery || `${config.coordinates.lat},${config.coordinates.lng}`
+      )}`
+    : config.googleMapsUrl ||
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        fullAddressQuery || `${config.coordinates.lat},${config.coordinates.lng}`
+      )}`;
+
+  const wazeRouteUrl =
+    config.wazeUrl ||
+    (config.coordinates.lat && config.coordinates.lng
+      ? `https://waze.com/ul?ll=${config.coordinates.lat},${config.coordinates.lng}&navigate=yes`
+      : `https://waze.com/ul?q=${encodeURIComponent(fullAddressQuery)}&navigate=yes`);
 
   return (
     <section id="ubicacion" className="py-6 sm:py-12 bg-slate-950 border-b border-slate-900">
@@ -98,9 +116,11 @@ export const GpsLocationSection: React.FC = () => {
                   <p className="text-xs sm:text-sm text-slate-300 font-medium mt-0.5 sm:mt-1">
                     {config.address}
                   </p>
-                  <p className="text-[10px] sm:text-xs text-slate-400">
-                    {config.neighborhood}, {config.city}
-                  </p>
+                  {locationSubtitle ? (
+                    <p className="text-[10px] sm:text-xs text-slate-400">
+                      {locationSubtitle}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
@@ -163,7 +183,7 @@ export const GpsLocationSection: React.FC = () => {
 
                 <a
                   id="open-waze-btn"
-                  href={config.wazeUrl}
+                  href={wazeRouteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="py-2.5 px-3 bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-800/60 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition"
@@ -216,24 +236,24 @@ export const GpsLocationSection: React.FC = () => {
 
           {/* Interactive Visual Map Card */}
           <div className="lg:col-span-7 h-full min-h-[380px] bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl flex flex-col">
-            {/* Real OpenStreetMap embed centered at the barber shop coordinates */}
+            {/* Google Maps Real Location Embed */}
             <iframe
               title="Mapa de la Barbería"
               width="100%"
               height="100%"
-              className="w-full h-full min-h-[380px] border-0 filter invert contrast-125 opacity-80"
-              src={`https://www.openstreetmap.org/export/embed.html?bbox=${config.coordinates.lng - 0.008}%2C${config.coordinates.lat - 0.006}%2C${config.coordinates.lng + 0.008}%2C${config.coordinates.lat + 0.006}&layer=mapnik&marker=${config.coordinates.lat}%2C${config.coordinates.lng}`}
+              className="w-full h-full min-h-[380px] border-0 rounded-2xl"
+              loading="lazy"
+              allowFullScreen
+              referrerPolicy="no-referrer-when-downgrade"
+              src={mapEmbedUrl}
             />
 
             {/* Overlay Pin Banner */}
-            <div className="absolute top-4 left-4 right-4 sm:right-auto bg-slate-950/90 backdrop-blur-md p-3 rounded-xl border border-slate-800 shadow-xl max-w-sm">
+            <div className="absolute top-4 left-4 right-4 sm:right-auto bg-slate-950/90 backdrop-blur-md p-3 rounded-xl border border-slate-800 shadow-xl max-w-sm pointer-events-none">
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-amber-400 animate-ping" />
                 <strong className="text-xs text-white font-bold">{config.shopName}</strong>
               </div>
-              <p className="text-[11px] text-slate-300 mt-1">
-                {config.address} • Balvanera / Abasto
-              </p>
               <p className="text-[10px] text-amber-400 font-semibold mt-0.5">
                 {config.openingHoursText}
               </p>
