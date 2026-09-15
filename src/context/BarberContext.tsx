@@ -23,7 +23,7 @@ import {
   INITIAL_PROMOS
 } from '../data/initialData';
 import { updateBarberShopSchema } from '../utils/seoHelper';
-import { auth, googleProvider, initFirebase, db } from '../lib/firebase';
+import { auth, googleProvider, initFirebase, db, rtdb } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
   doc,
@@ -31,6 +31,12 @@ import {
   getDoc,
   onSnapshot
 } from 'firebase/firestore';
+import {
+  ref as refRtdb,
+  set as setRtdb,
+  onValue as onValueRtdb,
+  get as getRtdb
+} from 'firebase/database';
 
 interface BarberContextType {
   config: BarberShopConfig;
@@ -235,7 +241,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       MASTER_SUPERADMIN_EMAILS.some((m) => m.toLowerCase() === currentUser.email?.toLowerCase().trim())
   );
 
-  // Helper function to push updates to Firebase Firestore Cloud for the barber shop
+  // Helper function to push updates to Firebase Firestore and Realtime Database for the barber shop
   const saveToCloud = async (partialData: Record<string, any>) => {
     try {
       const payload = cleanForFirestore({
@@ -243,134 +249,139 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         lastUpdated: new Date().toISOString()
       });
 
-      // Write to unified main document
-      await setDoc(doc(db, 'barbershop', 'main'), payload, { merge: true });
+      // 1. Write to Firestore unified main document
+      setDoc(doc(db, 'barbershop', 'main'), payload, { merge: true }).catch((err) => {
+        console.warn('Firestore setDoc note:', err);
+      });
 
       // Mirror to 'shops/elias' for backwards compatibility
       setDoc(doc(db, 'shops', 'elias'), payload, { merge: true }).catch(() => {});
+
+      // 2. Write to Firebase Realtime Database
+      if (rtdb) {
+        setRtdb(refRtdb(rtdb, 'barbershop/main'), payload).catch((err) => {
+          console.warn('Realtime Database set error:', err);
+        });
+      }
 
       setIsCloudSynced(true);
       setCloudSyncError(null);
       setLastCloudSyncTime(new Date().toLocaleTimeString());
     } catch (e: any) {
-      console.warn('Nota de sincronización Firestore:', e);
-      if (e?.message?.includes('Cloud Firestore API') || e?.code === 'permission-denied') {
-        setCloudSyncError('Cloud Firestore no está activada en Firebase Console.');
-      }
+      console.warn('Nota de sincronización Cloud:', e);
     }
   };
 
-  // Listen to Firebase Real-time Firestore Cloud Data
+  // Helper to ingest and update local state from cloud payload (Firestore or RTDB)
+  const applyCloudData = (data: any) => {
+    if (!data) return;
+    if (data.config && typeof data.config === 'object') {
+      setConfig((prev) => {
+        const updated = { ...prev, ...data.config };
+        saveItem(BASE_STORAGE_KEYS.CONFIG, updated);
+        return updated;
+      });
+    }
+    if (Array.isArray(data.barbers)) {
+      setBarbers(data.barbers);
+      saveItem(BASE_STORAGE_KEYS.BARBERS, data.barbers);
+    }
+    if (Array.isArray(data.services)) {
+      setServices(data.services);
+      saveItem(BASE_STORAGE_KEYS.SERVICES, data.services);
+    }
+    if (Array.isArray(data.appointments)) {
+      setAppointments(data.appointments);
+      saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, data.appointments);
+    }
+    if (Array.isArray(data.stories)) {
+      setStories(data.stories);
+      saveItem(BASE_STORAGE_KEYS.STORIES, data.stories);
+    }
+    if (Array.isArray(data.gallery)) {
+      setGallery(data.gallery);
+      saveItem(BASE_STORAGE_KEYS.GALLERY, data.gallery);
+    }
+    if (Array.isArray(data.reviews)) {
+      setReviews(data.reviews);
+      saveItem(BASE_STORAGE_KEYS.REVIEWS, data.reviews);
+    }
+    if (Array.isArray(data.promos)) {
+      setPromos(data.promos);
+      saveItem(BASE_STORAGE_KEYS.PROMOS, data.promos);
+    }
+    setIsCloudSynced(true);
+    setCloudSyncError(null);
+    setLastCloudSyncTime(new Date().toLocaleTimeString());
+  };
+
+  // Listen to Firebase Cloud Data (Firestore & Realtime Database)
   useEffect(() => {
+    let unsubFirestore: (() => void) | null = null;
+    let unsubRtdb: (() => void) | null = null;
+
+    // 1. Realtime Database Listener
+    if (rtdb) {
+      try {
+        const rtdbRef = refRtdb(rtdb, 'barbershop/main');
+        unsubRtdb = onValueRtdb(
+          rtdbRef,
+          (snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.val();
+              applyCloudData(data);
+            } else {
+              // Seed initial RTDB payload if empty
+              const initialPayload = cleanForFirestore({
+                config: getSaved(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG),
+                barbers: getSaved(BASE_STORAGE_KEYS.BARBERS, INITIAL_BARBERS),
+                services: getSaved(BASE_STORAGE_KEYS.SERVICES, INITIAL_SERVICES),
+                appointments: getSaved(BASE_STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS),
+                stories: getSaved(BASE_STORAGE_KEYS.STORIES, INITIAL_STORIES),
+                gallery: getSaved(BASE_STORAGE_KEYS.GALLERY, INITIAL_GALLERY),
+                reviews: getSaved(BASE_STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS),
+                promos: getSaved(BASE_STORAGE_KEYS.PROMOS, INITIAL_PROMOS),
+                ownerEmail: 'informaticasurr@gmail.com',
+                allowedAdminEmails: MASTER_SUPERADMIN_EMAILS,
+                createdAt: new Date().toISOString(),
+                lastUpdated: new Date().toISOString()
+              });
+              setRtdb(rtdbRef, initialPayload).catch(() => {});
+            }
+          },
+          (err) => {
+            console.warn('Realtime Database listener note:', err);
+          }
+        );
+      } catch (e) {
+        console.warn('Realtime Database setup note:', e);
+      }
+    }
+
+    // 2. Firestore Listener
     try {
       const mainDocRef = doc(db, 'barbershop', 'main');
-
-      const unsubscribe = onSnapshot(
+      unsubFirestore = onSnapshot(
         mainDocRef,
         (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
-            if (data) {
-              if (data.config && typeof data.config === 'object') {
-                setConfig((prev) => {
-                  const updated = { ...prev, ...data.config };
-                  saveItem(BASE_STORAGE_KEYS.CONFIG, updated);
-                  return updated;
-                });
-              }
-              if (Array.isArray(data.barbers)) {
-                setBarbers(data.barbers);
-                saveItem(BASE_STORAGE_KEYS.BARBERS, data.barbers);
-              }
-              if (Array.isArray(data.services)) {
-                setServices(data.services);
-                saveItem(BASE_STORAGE_KEYS.SERVICES, data.services);
-              }
-              if (Array.isArray(data.appointments)) {
-                setAppointments(data.appointments);
-                saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, data.appointments);
-              }
-              if (Array.isArray(data.stories)) {
-                setStories(data.stories);
-                saveItem(BASE_STORAGE_KEYS.STORIES, data.stories);
-              }
-              if (Array.isArray(data.gallery)) {
-                setGallery(data.gallery);
-                saveItem(BASE_STORAGE_KEYS.GALLERY, data.gallery);
-              }
-              if (Array.isArray(data.reviews)) {
-                setReviews(data.reviews);
-                saveItem(BASE_STORAGE_KEYS.REVIEWS, data.reviews);
-              }
-              if (Array.isArray(data.promos)) {
-                setPromos(data.promos);
-                saveItem(BASE_STORAGE_KEYS.PROMOS, data.promos);
-              }
-              setIsCloudSynced(true);
-              setCloudSyncError(null);
-              setLastCloudSyncTime(new Date().toLocaleTimeString());
-            }
+            applyCloudData(data);
           } else {
             // Check fallback 'shops/elias' doc if main doesn't exist
             getDoc(doc(db, 'shops', 'elias')).then((fallbackSnap) => {
               if (fallbackSnap.exists()) {
-                const fData = fallbackSnap.data();
-                if (fData?.config) {
-                  setConfig((prev) => {
-                    const merged = { ...prev, ...fData.config };
-                    saveItem(BASE_STORAGE_KEYS.CONFIG, merged);
-                    return merged;
-                  });
-                }
-                if (Array.isArray(fData?.barbers)) {
-                  setBarbers(fData.barbers);
-                  saveItem(BASE_STORAGE_KEYS.BARBERS, fData.barbers);
-                }
-                if (Array.isArray(fData?.services)) {
-                  setServices(fData.services);
-                  saveItem(BASE_STORAGE_KEYS.SERVICES, fData.services);
-                }
-                if (Array.isArray(fData?.appointments)) {
-                  setAppointments(fData.appointments);
-                  saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, fData.appointments);
-                }
-                if (Array.isArray(fData?.stories)) {
-                  setStories(fData.stories);
-                  saveItem(BASE_STORAGE_KEYS.STORIES, fData.stories);
-                }
-                if (Array.isArray(fData?.gallery)) {
-                  setGallery(fData.gallery);
-                  saveItem(BASE_STORAGE_KEYS.GALLERY, fData.gallery);
-                }
-                if (Array.isArray(fData?.reviews)) {
-                  setReviews(fData.reviews);
-                  saveItem(BASE_STORAGE_KEYS.REVIEWS, fData.reviews);
-                }
-                if (Array.isArray(fData?.promos)) {
-                  setPromos(fData.promos);
-                  saveItem(BASE_STORAGE_KEYS.PROMOS, fData.promos);
-                }
-                setIsCloudSynced(true);
+                applyCloudData(fallbackSnap.data());
               } else {
-                // If cloud document is not initialized yet, seed it with the CURRENT user's state (from localStorage)
-                const currentLocalConfig = getSaved(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG);
-                const currentLocalBarbers = getSaved(BASE_STORAGE_KEYS.BARBERS, INITIAL_BARBERS);
-                const currentLocalServices = getSaved(BASE_STORAGE_KEYS.SERVICES, INITIAL_SERVICES);
-                const currentLocalAppointments = getSaved(BASE_STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS);
-                const currentLocalStories = getSaved(BASE_STORAGE_KEYS.STORIES, INITIAL_STORIES);
-                const currentLocalGallery = getSaved(BASE_STORAGE_KEYS.GALLERY, INITIAL_GALLERY);
-                const currentLocalReviews = getSaved(BASE_STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
-                const currentLocalPromos = getSaved(BASE_STORAGE_KEYS.PROMOS, INITIAL_PROMOS);
-
                 const initialPayload = cleanForFirestore({
-                  config: currentLocalConfig,
-                  barbers: currentLocalBarbers,
-                  services: currentLocalServices,
-                  appointments: currentLocalAppointments,
-                  stories: currentLocalStories,
-                  gallery: currentLocalGallery,
-                  reviews: currentLocalReviews,
-                  promos: currentLocalPromos,
+                  config: getSaved(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG),
+                  barbers: getSaved(BASE_STORAGE_KEYS.BARBERS, INITIAL_BARBERS),
+                  services: getSaved(BASE_STORAGE_KEYS.SERVICES, INITIAL_SERVICES),
+                  appointments: getSaved(BASE_STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS),
+                  stories: getSaved(BASE_STORAGE_KEYS.STORIES, INITIAL_STORIES),
+                  gallery: getSaved(BASE_STORAGE_KEYS.GALLERY, INITIAL_GALLERY),
+                  reviews: getSaved(BASE_STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS),
+                  promos: getSaved(BASE_STORAGE_KEYS.PROMOS, INITIAL_PROMOS),
                   ownerEmail: 'informaticasurr@gmail.com',
                   allowedAdminEmails: MASTER_SUPERADMIN_EMAILS,
                   createdAt: new Date().toISOString(),
@@ -383,16 +394,16 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         },
         (err) => {
           console.warn('Firestore snapshot note:', err);
-          if (err?.message?.includes('Cloud Firestore API') || err?.code === 'permission-denied') {
-            setCloudSyncError('Cloud Firestore no está activada en Firebase Console.');
-          }
         }
       );
-
-      return () => unsubscribe();
     } catch (e: any) {
       console.warn('Firestore listener setup note:', e);
     }
+
+    return () => {
+      if (unsubFirestore) unsubFirestore();
+      if (unsubRtdb) unsubRtdb();
+    };
   }, []);
 
   // Helper to check if an email address is allowed as administrator

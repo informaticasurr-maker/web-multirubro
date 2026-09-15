@@ -1,11 +1,13 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
+import { getDatabase, Database } from 'firebase/database';
 import { FirebaseCustomConfig } from '../types';
 
 export const OFFICIAL_FIREBASE_CONFIG = {
   apiKey: "AIzaSyCypDN-qT10QCrXr47ynDnmdX-28AjwuN0",
   authDomain: "web-multirubro.firebaseapp.com",
+  databaseURL: "https://web-multirubro-default-rtdb.firebaseio.com",
   projectId: "web-multirubro",
   storageBucket: "web-multirubro.firebasestorage.app",
   messagingSenderId: "1026921238822",
@@ -24,6 +26,10 @@ export const getEffectiveFirebaseConfig = (customConfig?: FirebaseCustomConfig) 
       customConfig?.authDomain?.trim() ||
       env.VITE_FIREBASE_AUTH_DOMAIN ||
       OFFICIAL_FIREBASE_CONFIG.authDomain,
+    databaseURL:
+      customConfig?.databaseURL?.trim() ||
+      env.VITE_FIREBASE_DATABASE_URL ||
+      OFFICIAL_FIREBASE_CONFIG.databaseURL,
     projectId:
       customConfig?.projectId?.trim() ||
       env.VITE_FIREBASE_PROJECT_ID ||
@@ -46,10 +52,11 @@ export const getEffectiveFirebaseConfig = (customConfig?: FirebaseCustomConfig) 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
+let rtdb: Database | null = null;
 
 export const initFirebase = (
   customConfig?: FirebaseCustomConfig
-): { app: FirebaseApp; auth: Auth; db: Firestore } => {
+): { app: FirebaseApp; auth: Auth; db: Firestore; rtdb: Database } => {
   const config = getEffectiveFirebaseConfig(customConfig);
 
   try {
@@ -60,22 +67,24 @@ export const initFirebase = (
     }
     auth = getAuth(app);
     db = getFirestore(app);
+    rtdb = getDatabase(app);
   } catch (error) {
     console.error('Error initializing Firebase App:', error);
     app = initializeApp(config, 'web-multirubro-' + Date.now());
     auth = getAuth(app);
     db = getFirestore(app);
+    rtdb = getDatabase(app);
   }
 
-  return { app, auth, db };
+  return { app, auth, db, rtdb };
 };
 
 // Initial default instance
-const { app: defaultApp, auth: defaultAuth, db: defaultDb } = initFirebase();
+const { app: defaultApp, auth: defaultAuth, db: defaultDb, rtdb: defaultRtdb } = initFirebase();
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
 
-export { defaultApp as app, defaultAuth as auth, defaultDb as db };
+export { defaultApp as app, defaultAuth as auth, defaultDb as db, defaultRtdb as rtdb };
