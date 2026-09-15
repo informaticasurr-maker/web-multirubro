@@ -114,13 +114,8 @@ export const GpsLocationSection: React.FC = () => {
                     {config.shopName}
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-300 font-medium mt-0.5 sm:mt-1">
-                    {config.address}
+                    {config.address}, {config.neighborhood}
                   </p>
-                  {locationSubtitle ? (
-                    <p className="text-[10px] sm:text-xs text-slate-400">
-                      {locationSubtitle}
-                    </p>
-                  ) : null}
                 </div>
               </div>
 

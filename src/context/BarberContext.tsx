@@ -201,9 +201,10 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const saved = getSaved(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG);
     if (saved) {
       if (
-        saved.neighborhood?.includes('') ||
+        saved.neighborhood === 'Balvanera / Abasto' ||
+        saved.neighborhood === 'Ciudad Evita' ||
+        saved.neighborhood?.includes('Balvanera') ||
         saved.neighborhood?.includes('Abasto') ||
-        saved.neighborhood?.includes('Ciudad Evita') ||
         saved.address?.includes('Corrientes 2450') ||
         saved.coordinates?.lat === -34.6037 ||
         saved.coordinates?.lat === -34.6047 ||
@@ -300,9 +301,11 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (data.config && typeof data.config === 'object') {
       const incomingConfig = { ...data.config };
       if (
-        incomingConfig.neighborhood?.includes() ||
+        incomingConfig.neighborhood === 'Balvanera / Abasto' ||
+        incomingConfig.neighborhood === 'Ciudad Evita' ||
+        incomingConfig.neighborhood?.includes('Balvanera') ||
         incomingConfig.neighborhood?.includes('Abasto') ||
-        incomingConfig.neighborhood?.includes('Ciudad Evita') ||
+        incomingConfig.address?.includes('Corrientes 2450') ||
         incomingConfig.coordinates?.lat === -34.6037 ||
         incomingConfig.coordinates?.lat === -34.6047 ||
         incomingConfig.coordinates?.lat === -34.7185
@@ -395,9 +398,11 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     if (
-      config.neighborhood?.includes('') ||
-      config.neighborhood?.includes('') ||
-      config.neighborhood?.includes('Ciudad Evita') ||
+      config.neighborhood === 'Balvanera / Abasto' ||
+      config.neighborhood === 'Ciudad Evita' ||
+      config.neighborhood?.includes('Balvanera') ||
+      config.neighborhood?.includes('Abasto') ||
+      config.address?.includes('Corrientes 2450') ||
       config.coordinates?.lat === -34.6037 ||
       config.coordinates?.lat === -34.6047 ||
       config.coordinates?.lat === -34.7185
