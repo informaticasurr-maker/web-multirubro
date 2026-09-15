@@ -14,7 +14,8 @@ import {
   LogOut,
   ShieldCheck,
   UserCheck,
-  Store
+  Store,
+  ExternalLink
 } from 'lucide-react';
 import { TabAppointments } from './TabAppointments';
 import { TabFinancials } from './TabFinancials';
@@ -48,6 +49,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     config,
     checkUserPasswordStatus,
     isCloudSynced,
+    cloudSyncError,
     lastCloudSyncTime,
     currentShopSlug,
     availableShops
@@ -171,6 +173,27 @@ export const AdminModal: React.FC<AdminModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Cloud Sync Warning Banner if Firestore is not yet activated */}
+        {cloudSyncError && (
+          <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-amber-300">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+              <span>
+                <strong>Sincronización en la Nube:</strong> Para que los turnos y configuraciones se guarden en Firebase permanentemente entre todos tus dispositivos, activa Cloud Firestore en la consola.
+              </span>
+            </div>
+            <a
+              href="https://console.firebase.google.com/project/web-multirubro/firestore"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg transition text-xs flex items-center gap-1.5 shadow-sm whitespace-nowrap self-end sm:self-auto"
+            >
+              <span>Activar Firestore</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        )}
 
         {/* Body */}
         {!isAdmin ? (
