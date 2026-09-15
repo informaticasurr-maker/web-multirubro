@@ -34,6 +34,7 @@ import {
 import {
   ref as refRtdb,
   set as setRtdb,
+  update as updateRtdb,
   onValue as onValueRtdb,
   get as getRtdb
 } from 'firebase/database';
@@ -280,10 +281,10 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       // Mirror to 'shops/elias' for backwards compatibility
       setDoc(doc(db, 'shops', 'elias'), payload, { merge: true }).catch(() => { });
 
-      // 2. Write to Firebase Realtime Database
+      // 2. Write to Firebase Realtime Database using update (merge, non-destructive)
       if (rtdb) {
-        setRtdb(refRtdb(rtdb, 'barbershop/main'), payload).catch((err) => {
-          console.warn('Realtime Database set error:', err);
+        updateRtdb(refRtdb(rtdb, 'barbershop/main'), payload).catch((err) => {
+          console.warn('Realtime Database update error:', err);
         });
       }
 
@@ -337,40 +338,14 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, data.appointments);
     }
     if (Array.isArray(data.stories)) {
-      setStories((prevLocal) => {
-        const map = new Map<string, StoryItem>();
-        data.stories.forEach((s: StoryItem) => {
-          if (s && s.id) map.set(s.id, s);
-        });
-        prevLocal.forEach((s: StoryItem) => {
-          if (s && s.id) {
-            const existing = map.get(s.id);
-            map.set(s.id, { ...existing, ...s });
-          }
-        });
-        const merged = Array.from(map.values());
-        saveToIDB(BASE_STORAGE_KEYS.STORIES, merged);
-        saveItem(BASE_STORAGE_KEYS.STORIES, merged);
-        return merged;
-      });
+      setStories(data.stories);
+      saveToIDB(BASE_STORAGE_KEYS.STORIES, data.stories);
+      saveItem(BASE_STORAGE_KEYS.STORIES, data.stories);
     }
     if (Array.isArray(data.gallery)) {
-      setGallery((prevLocal) => {
-        const map = new Map<string, GalleryItem>();
-        data.gallery.forEach((g: GalleryItem) => {
-          if (g && g.id) map.set(g.id, g);
-        });
-        prevLocal.forEach((g: GalleryItem) => {
-          if (g && g.id) {
-            const existing = map.get(g.id);
-            map.set(g.id, { ...existing, ...g });
-          }
-        });
-        const merged = Array.from(map.values());
-        saveToIDB(BASE_STORAGE_KEYS.GALLERY, merged);
-        saveItem(BASE_STORAGE_KEYS.GALLERY, merged);
-        return merged;
-      });
+      setGallery(data.gallery);
+      saveToIDB(BASE_STORAGE_KEYS.GALLERY, data.gallery);
+      saveItem(BASE_STORAGE_KEYS.GALLERY, data.gallery);
     }
     if (Array.isArray(data.reviews)) {
       setReviews(data.reviews);
@@ -562,23 +537,13 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     loadFromIDB<StoryItem[]>(BASE_STORAGE_KEYS.STORIES, []).then((idbStories) => {
       if (Array.isArray(idbStories) && idbStories.length > 0) {
-        setStories((current) => {
-          const map = new Map<string, StoryItem>();
-          idbStories.forEach((s) => { if (s && s.id) map.set(s.id, s); });
-          current.forEach((s) => { if (s && s.id) map.set(s.id, s); });
-          return Array.from(map.values());
-        });
+        setStories(idbStories);
       }
     });
 
     loadFromIDB<GalleryItem[]>(BASE_STORAGE_KEYS.GALLERY, []).then((idbGallery) => {
       if (Array.isArray(idbGallery) && idbGallery.length > 0) {
-        setGallery((current) => {
-          const map = new Map<string, GalleryItem>();
-          idbGallery.forEach((g) => { if (g && g.id) map.set(g.id, g); });
-          current.forEach((g) => { if (g && g.id) map.set(g.id, g); });
-          return Array.from(map.values());
-        });
+        setGallery(idbGallery);
       }
     });
   }, []);
