@@ -246,7 +246,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       // Write to unified main document
       await setDoc(doc(db, 'barbershop', 'main'), payload, { merge: true });
 
-      // Also mirror to 'shops/elias' for backwards compatibility
+      // Mirror to 'shops/elias' for backwards compatibility
       setDoc(doc(db, 'shops', 'elias'), payload, { merge: true }).catch(() => {});
 
       setIsCloudSynced(true);
@@ -272,15 +272,40 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const data = docSnap.data();
             if (data) {
               if (data.config && typeof data.config === 'object') {
-                setConfig((prev) => ({ ...prev, ...data.config }));
+                setConfig((prev) => {
+                  const updated = { ...prev, ...data.config };
+                  saveItem(BASE_STORAGE_KEYS.CONFIG, updated);
+                  return updated;
+                });
               }
-              if (data.barbers && Array.isArray(data.barbers)) setBarbers(data.barbers);
-              if (data.services && Array.isArray(data.services)) setServices(data.services);
-              if (data.appointments && Array.isArray(data.appointments)) setAppointments(data.appointments);
-              if (data.stories && Array.isArray(data.stories)) setStories(data.stories);
-              if (data.gallery && Array.isArray(data.gallery)) setGallery(data.gallery);
-              if (data.reviews && Array.isArray(data.reviews)) setReviews(data.reviews);
-              if (data.promos && Array.isArray(data.promos)) setPromos(data.promos);
+              if (Array.isArray(data.barbers)) {
+                setBarbers(data.barbers);
+                saveItem(BASE_STORAGE_KEYS.BARBERS, data.barbers);
+              }
+              if (Array.isArray(data.services)) {
+                setServices(data.services);
+                saveItem(BASE_STORAGE_KEYS.SERVICES, data.services);
+              }
+              if (Array.isArray(data.appointments)) {
+                setAppointments(data.appointments);
+                saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, data.appointments);
+              }
+              if (Array.isArray(data.stories)) {
+                setStories(data.stories);
+                saveItem(BASE_STORAGE_KEYS.STORIES, data.stories);
+              }
+              if (Array.isArray(data.gallery)) {
+                setGallery(data.gallery);
+                saveItem(BASE_STORAGE_KEYS.GALLERY, data.gallery);
+              }
+              if (Array.isArray(data.reviews)) {
+                setReviews(data.reviews);
+                saveItem(BASE_STORAGE_KEYS.REVIEWS, data.reviews);
+              }
+              if (Array.isArray(data.promos)) {
+                setPromos(data.promos);
+                saveItem(BASE_STORAGE_KEYS.PROMOS, data.promos);
+              }
               setIsCloudSynced(true);
               setCloudSyncError(null);
               setLastCloudSyncTime(new Date().toLocaleTimeString());
@@ -290,26 +315,62 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             getDoc(doc(db, 'shops', 'elias')).then((fallbackSnap) => {
               if (fallbackSnap.exists()) {
                 const fData = fallbackSnap.data();
-                if (fData?.config) setConfig((prev) => ({ ...prev, ...fData.config }));
-                if (Array.isArray(fData?.barbers)) setBarbers(fData.barbers);
-                if (Array.isArray(fData?.services)) setServices(fData.services);
-                if (Array.isArray(fData?.appointments)) setAppointments(fData.appointments);
-                if (Array.isArray(fData?.stories)) setStories(fData.stories);
-                if (Array.isArray(fData?.gallery)) setGallery(fData.gallery);
-                if (Array.isArray(fData?.reviews)) setReviews(fData.reviews);
-                if (Array.isArray(fData?.promos)) setPromos(fData.promos);
+                if (fData?.config) {
+                  setConfig((prev) => {
+                    const merged = { ...prev, ...fData.config };
+                    saveItem(BASE_STORAGE_KEYS.CONFIG, merged);
+                    return merged;
+                  });
+                }
+                if (Array.isArray(fData?.barbers)) {
+                  setBarbers(fData.barbers);
+                  saveItem(BASE_STORAGE_KEYS.BARBERS, fData.barbers);
+                }
+                if (Array.isArray(fData?.services)) {
+                  setServices(fData.services);
+                  saveItem(BASE_STORAGE_KEYS.SERVICES, fData.services);
+                }
+                if (Array.isArray(fData?.appointments)) {
+                  setAppointments(fData.appointments);
+                  saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, fData.appointments);
+                }
+                if (Array.isArray(fData?.stories)) {
+                  setStories(fData.stories);
+                  saveItem(BASE_STORAGE_KEYS.STORIES, fData.stories);
+                }
+                if (Array.isArray(fData?.gallery)) {
+                  setGallery(fData.gallery);
+                  saveItem(BASE_STORAGE_KEYS.GALLERY, fData.gallery);
+                }
+                if (Array.isArray(fData?.reviews)) {
+                  setReviews(fData.reviews);
+                  saveItem(BASE_STORAGE_KEYS.REVIEWS, fData.reviews);
+                }
+                if (Array.isArray(fData?.promos)) {
+                  setPromos(fData.promos);
+                  saveItem(BASE_STORAGE_KEYS.PROMOS, fData.promos);
+                }
                 setIsCloudSynced(true);
               } else {
-                // Initialize default seed if empty
+                // If cloud document is not initialized yet, seed it with the CURRENT user's state (from localStorage)
+                const currentLocalConfig = getSaved(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG);
+                const currentLocalBarbers = getSaved(BASE_STORAGE_KEYS.BARBERS, INITIAL_BARBERS);
+                const currentLocalServices = getSaved(BASE_STORAGE_KEYS.SERVICES, INITIAL_SERVICES);
+                const currentLocalAppointments = getSaved(BASE_STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS);
+                const currentLocalStories = getSaved(BASE_STORAGE_KEYS.STORIES, INITIAL_STORIES);
+                const currentLocalGallery = getSaved(BASE_STORAGE_KEYS.GALLERY, INITIAL_GALLERY);
+                const currentLocalReviews = getSaved(BASE_STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
+                const currentLocalPromos = getSaved(BASE_STORAGE_KEYS.PROMOS, INITIAL_PROMOS);
+
                 const initialPayload = cleanForFirestore({
-                  config: INITIAL_CONFIG,
-                  barbers: INITIAL_BARBERS,
-                  services: INITIAL_SERVICES,
-                  appointments: INITIAL_APPOINTMENTS,
-                  stories: INITIAL_STORIES,
-                  gallery: INITIAL_GALLERY,
-                  reviews: INITIAL_REVIEWS,
-                  promos: INITIAL_PROMOS,
+                  config: currentLocalConfig,
+                  barbers: currentLocalBarbers,
+                  services: currentLocalServices,
+                  appointments: currentLocalAppointments,
+                  stories: currentLocalStories,
+                  gallery: currentLocalGallery,
+                  reviews: currentLocalReviews,
+                  promos: currentLocalPromos,
                   ownerEmail: 'informaticasurr@gmail.com',
                   allowedAdminEmails: MASTER_SUPERADMIN_EMAILS,
                   createdAt: new Date().toISOString(),
@@ -321,7 +382,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
         },
         (err) => {
-          console.warn('Firestore snapshot error:', err);
+          console.warn('Firestore snapshot note:', err);
           if (err?.message?.includes('Cloud Firestore API') || err?.code === 'permission-denied') {
             setCloudSyncError('Cloud Firestore no está activada en Firebase Console.');
           }
@@ -378,7 +439,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     updateBarberShopSchema(config, services, barbers, reviews);
   }, [config, services, barbers, reviews]);
 
-  // Persist state changes to localStorage as offline cache
+  // Always keep localStorage updated as offline cache
   useEffect(() => { saveItem(BASE_STORAGE_KEYS.CONFIG, config); }, [config]);
   useEffect(() => { saveItem(BASE_STORAGE_KEYS.BARBERS, barbers); }, [barbers]);
   useEffect(() => { saveItem(BASE_STORAGE_KEYS.SERVICES, services); }, [services]);
@@ -470,6 +531,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       };
 
       setConfig(newConfigObj);
+      saveItem(BASE_STORAGE_KEYS.CONFIG, newConfigObj);
       saveToCloud({ config: newConfigObj });
 
       try {
@@ -578,6 +640,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const updateConfig = (newConfig: Partial<BarberShopConfig>) => {
     setConfig((prev) => {
       const updated = { ...prev, ...newConfig };
+      saveItem(BASE_STORAGE_KEYS.CONFIG, updated);
       saveToCloud({ config: updated });
       return updated;
     });
@@ -613,6 +676,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setAppointments((prev) => {
       const updated = [newAppointment, ...prev];
+      saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, updated);
       saveToCloud({ appointments: updated });
       return updated;
     });
@@ -632,6 +696,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const updateAppointmentStatus = (id: string, status: AppointmentStatus) => {
     setAppointments((prev) => {
       const updated = prev.map((apt) => (apt.id === id ? { ...apt, status } : apt));
+      saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, updated);
       saveToCloud({ appointments: updated });
       return updated;
     });
@@ -662,6 +727,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } else {
         updated = [...prev, barber];
       }
+      saveItem(BASE_STORAGE_KEYS.BARBERS, updated);
       saveToCloud({ barbers: updated });
       return updated;
     });
@@ -670,6 +736,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const deleteBarber = (id: string) => {
     setBarbers((prev) => {
       const updated = prev.filter((b) => b.id !== id);
+      saveItem(BASE_STORAGE_KEYS.BARBERS, updated);
       saveToCloud({ barbers: updated });
       return updated;
     });
@@ -686,6 +753,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } else {
         updated = [...prev, service];
       }
+      saveItem(BASE_STORAGE_KEYS.SERVICES, updated);
       saveToCloud({ services: updated });
       return updated;
     });
@@ -694,6 +762,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const deleteService = (id: string) => {
     setServices((prev) => {
       const updated = prev.filter((s) => s.id !== id);
+      saveItem(BASE_STORAGE_KEYS.SERVICES, updated);
       saveToCloud({ services: updated });
       return updated;
     });
@@ -710,6 +779,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setStories((prev) => {
       const updated = [newStory, ...prev];
+      saveItem(BASE_STORAGE_KEYS.STORIES, updated);
       saveToCloud({ stories: updated });
       return updated;
     });
@@ -720,6 +790,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const deleteStory = (id: string) => {
     setStories((prev) => {
       const updated = prev.filter((s) => s.id !== id);
+      saveItem(BASE_STORAGE_KEYS.STORIES, updated);
       saveToCloud({ stories: updated });
       return updated;
     });
@@ -728,6 +799,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const incrementStoryViews = (id: string) => {
     setStories((prev) => {
       const updated = prev.map((s) => (s.id === id ? { ...s, viewsCount: s.viewsCount + 1 } : s));
+      saveItem(BASE_STORAGE_KEYS.STORIES, updated);
       saveToCloud({ stories: updated });
       return updated;
     });
@@ -743,6 +815,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setGallery((prev) => {
       const updated = [newItem, ...prev];
+      saveItem(BASE_STORAGE_KEYS.GALLERY, updated);
       saveToCloud({ gallery: updated });
       return updated;
     });
@@ -753,6 +826,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const deleteGalleryItem = (id: string) => {
     setGallery((prev) => {
       const updated = prev.filter((item) => item.id !== id);
+      saveItem(BASE_STORAGE_KEYS.GALLERY, updated);
       saveToCloud({ gallery: updated });
       return updated;
     });
@@ -761,6 +835,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const likeGalleryItem = (id: string) => {
     setGallery((prev) => {
       const updated = prev.map((item) => (item.id === id ? { ...item, likes: item.likes + 1 } : item));
+      saveItem(BASE_STORAGE_KEYS.GALLERY, updated);
       saveToCloud({ gallery: updated });
       return updated;
     });
@@ -782,6 +857,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setReviews((prev) => {
       const updated = [newReview, ...prev];
+      saveItem(BASE_STORAGE_KEYS.REVIEWS, updated);
       saveToCloud({ reviews: updated });
       return updated;
     });
@@ -795,6 +871,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const toggleHighlightReview = (id: string) => {
     setReviews((prev) => {
       const updated = prev.map((r) => (r.id === id ? { ...r, highlighted: !r.highlighted } : r));
+      saveItem(BASE_STORAGE_KEYS.REVIEWS, updated);
       saveToCloud({ reviews: updated });
       return updated;
     });
@@ -803,6 +880,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const toggleVerifyReview = (id: string) => {
     setReviews((prev) => {
       const updated = prev.map((r) => (r.id === id ? { ...r, verified: !r.verified } : r));
+      saveItem(BASE_STORAGE_KEYS.REVIEWS, updated);
       saveToCloud({ reviews: updated });
       return updated;
     });
@@ -811,6 +889,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const deleteReview = (id: string) => {
     setReviews((prev) => {
       const updated = prev.filter((r) => r.id !== id);
+      saveItem(BASE_STORAGE_KEYS.REVIEWS, updated);
       saveToCloud({ reviews: updated });
       return updated;
     });
@@ -826,6 +905,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     setPromos((prev) => {
       const updated = [newPromo, ...prev];
+      saveItem(BASE_STORAGE_KEYS.PROMOS, updated);
       saveToCloud({ promos: updated });
       return updated;
     });
@@ -836,6 +916,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const deletePromo = (id: string) => {
     setPromos((prev) => {
       const updated = prev.filter((p) => p.id !== id);
+      saveItem(BASE_STORAGE_KEYS.PROMOS, updated);
       saveToCloud({ promos: updated });
       return updated;
     });
@@ -863,14 +944,38 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const data = JSON.parse(jsonString);
       if (!data || typeof data !== 'object') return false;
 
-      if (data.config) setConfig(data.config);
-      if (Array.isArray(data.barbers)) setBarbers(data.barbers);
-      if (Array.isArray(data.services)) setServices(data.services);
-      if (Array.isArray(data.appointments)) setAppointments(data.appointments);
-      if (Array.isArray(data.stories)) setStories(data.stories);
-      if (Array.isArray(data.gallery)) setGallery(data.gallery);
-      if (Array.isArray(data.reviews)) setReviews(data.reviews);
-      if (Array.isArray(data.promos)) setPromos(data.promos);
+      if (data.config) {
+        setConfig(data.config);
+        saveItem(BASE_STORAGE_KEYS.CONFIG, data.config);
+      }
+      if (Array.isArray(data.barbers)) {
+        setBarbers(data.barbers);
+        saveItem(BASE_STORAGE_KEYS.BARBERS, data.barbers);
+      }
+      if (Array.isArray(data.services)) {
+        setServices(data.services);
+        saveItem(BASE_STORAGE_KEYS.SERVICES, data.services);
+      }
+      if (Array.isArray(data.appointments)) {
+        setAppointments(data.appointments);
+        saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, data.appointments);
+      }
+      if (Array.isArray(data.stories)) {
+        setStories(data.stories);
+        saveItem(BASE_STORAGE_KEYS.STORIES, data.stories);
+      }
+      if (Array.isArray(data.gallery)) {
+        setGallery(data.gallery);
+        saveItem(BASE_STORAGE_KEYS.GALLERY, data.gallery);
+      }
+      if (Array.isArray(data.reviews)) {
+        setReviews(data.reviews);
+        saveItem(BASE_STORAGE_KEYS.REVIEWS, data.reviews);
+      }
+      if (Array.isArray(data.promos)) {
+        setPromos(data.promos);
+        saveItem(BASE_STORAGE_KEYS.PROMOS, data.promos);
+      }
 
       saveToCloud({
         config: data.config,
@@ -904,6 +1009,15 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setGallery(INITIAL_GALLERY);
     setReviews(INITIAL_REVIEWS);
     setPromos(INITIAL_PROMOS);
+
+    saveItem(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG);
+    saveItem(BASE_STORAGE_KEYS.BARBERS, INITIAL_BARBERS);
+    saveItem(BASE_STORAGE_KEYS.SERVICES, INITIAL_SERVICES);
+    saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS);
+    saveItem(BASE_STORAGE_KEYS.STORIES, INITIAL_STORIES);
+    saveItem(BASE_STORAGE_KEYS.GALLERY, INITIAL_GALLERY);
+    saveItem(BASE_STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
+    saveItem(BASE_STORAGE_KEYS.PROMOS, INITIAL_PROMOS);
 
     saveToCloud({
       config: INITIAL_CONFIG,

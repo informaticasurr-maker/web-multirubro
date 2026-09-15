@@ -30,6 +30,25 @@ export const TabShopSettings: React.FC = () => {
 
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  // Sync form data whenever config changes in context/cloud/local
+  React.useEffect(() => {
+    setFormData((prev) => ({
+      ...config,
+      headlinePrefix: config.headlinePrefix ?? prev.headlinePrefix ?? 'Tu Corte Perfecto,',
+      headlineHighlight: config.headlineHighlight ?? prev.headlineHighlight ?? 'En Tiempo Real',
+      headlineColorTheme: config.headlineColorTheme ?? prev.headlineColorTheme ?? 'amber-gold',
+      headlineCustomColor: config.headlineCustomColor ?? prev.headlineCustomColor ?? '#f59e0b',
+      headlineSize: config.headlineSize ?? prev.headlineSize ?? 'normal',
+      subheadlineText:
+        config.subheadlineText ??
+        prev.subheadlineText ??
+        `${config.slogan}. Selecciona a tu barbero de confianza, consulta los turnos disponibles calculados al instante y recibe tu confirmación directa en WhatsApp.`,
+      subheadlineColorTheme: config.subheadlineColorTheme ?? prev.subheadlineColorTheme ?? 'slate-300',
+      subheadlineCustomColor: config.subheadlineCustomColor ?? prev.subheadlineCustomColor ?? '#cbd5e1',
+      subheadlineSize: config.subheadlineSize ?? prev.subheadlineSize ?? 'normal'
+    }));
+  }, [config]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateConfig(formData);
