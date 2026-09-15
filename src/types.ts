@@ -222,23 +222,3 @@ export interface InstrumentalTrack {
   coverImage?: string;
 }
 
-export interface ShopMetadata {
-  slug: string;
-  name: string;
-  ownerEmail?: string;
-  allowedAdminEmails?: string[];
-  logoUrl?: string;
-  phone?: string;
-  createdAt?: string;
-  lastUpdated?: string;
-}
-
-export interface CreateShopPayload {
-  name: string;
-  slug: string;
-  phone?: string;
-  ownerEmail?: string;
-  slogan?: string;
-  address?: string;
-}
-

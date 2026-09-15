@@ -10,9 +10,7 @@ import {
   PushPromo,
   AppointmentStatus,
   AdminUser,
-  FirebaseCustomConfig,
-  ShopMetadata,
-  CreateShopPayload
+  FirebaseCustomConfig
 } from '../types';
 import {
   INITIAL_CONFIG,
@@ -31,13 +29,8 @@ import {
   doc,
   setDoc,
   getDoc,
-  deleteDoc,
-  onSnapshot,
-  collection,
-  query,
-  getDocs
+  onSnapshot
 } from 'firebase/firestore';
-import { getCurrentShopSlug, DEFAULT_SHOP_SLUG, slugify, navigateToShop } from '../utils/shopRouter';
 
 interface BarberContextType {
   config: BarberShopConfig;
@@ -56,13 +49,6 @@ interface BarberContextType {
   isCloudSynced: boolean;
   cloudSyncError: string | null;
   lastCloudSyncTime: string | null;
-
-  // Multi-Shop SaaS actions
-  currentShopSlug: string;
-  availableShops: ShopMetadata[];
-  switchShop: (slug: string) => void;
-  createNewShop: (payload: CreateShopPayload) => Promise<{ success: boolean; slug?: string; error?: string }>;
-  deleteShop: (slug: string) => Promise<{ success: boolean; error?: string }>;
 
   // Actions
   setClientPhone: (phone: string) => void;
@@ -128,8 +114,6 @@ const MASTER_SUPERADMIN_EMAILS = [
   'eliascjnegocios@gmail.com'
 ];
 
-const getShopStorageKey = (baseKey: string, slug: string) => `${baseKey}_${slug || DEFAULT_SHOP_SLUG}`;
-
 const BASE_STORAGE_KEYS = {
   CONFIG: 'barberia_config_v1',
   BARBERS: 'barberia_barbers_v1',
@@ -142,42 +126,40 @@ const BASE_STORAGE_KEYS = {
   CLIENT_PHONE: 'barberia_client_phone_v1'
 };
 
-function getSaved<T>(baseKey: string, slug: string, fallback: T): T {
+function getSaved<T>(primaryKey: string, fallback: T): T {
   try {
-    const currentKey = getShopStorageKey(baseKey, slug);
-    const item = localStorage.getItem(currentKey);
+    // 1. Try primary unified key
+    const item = localStorage.getItem(primaryKey);
     if (item) {
       try {
         const parsed = JSON.parse(item);
         if (parsed !== null && parsed !== undefined) return parsed;
       } catch (e) {
-        console.warn('JSON parse error for', currentKey);
+        console.warn('JSON parse error for', primaryKey);
       }
     }
 
-    // Migration fallbacks: check all legacy keys across past versions so user data is never lost
+    // 2. Migration fallbacks: check all legacy keys across past versions so user data is never lost
     const candidateKeys = [
-      `${baseKey}_the-gentlemans-blade`,
-      `${baseKey}_elias`,
-      `${baseKey}_default`,
-      baseKey,
-      baseKey.replace('_v1', ''),
-      `${baseKey.replace('_v1', '')}_the-gentlemans-blade`,
-      `${baseKey.replace('_v1', '')}_elias`
+      `${primaryKey}_elias`,
+      `${primaryKey}_the-gentlemans-blade`,
+      `${primaryKey}_default`,
+      primaryKey.replace('_v1', ''),
+      `${primaryKey.replace('_v1', '')}_elias`,
+      `${primaryKey.replace('_v1', '')}_the-gentlemans-blade`
     ];
 
     for (const ck of candidateKeys) {
-      if (ck === currentKey) continue;
       const legacyItem = localStorage.getItem(ck);
       if (legacyItem) {
         try {
           const parsed = JSON.parse(legacyItem);
           if (parsed !== null && parsed !== undefined) {
-            // Save to current key to migrate it forward
-            localStorage.setItem(currentKey, legacyItem);
+            // Save to primary key to migrate it forward
+            localStorage.setItem(primaryKey, legacyItem);
             return parsed;
           }
-        } catch (e) {
+        } catch {
           // ignore parse error
         }
       }
@@ -185,7 +167,7 @@ function getSaved<T>(baseKey: string, slug: string, fallback: T): T {
 
     return fallback;
   } catch (e) {
-    console.error(`Error reading ${baseKey} from localStorage`, e);
+    console.error(`Error reading ${primaryKey} from localStorage`, e);
     return fallback;
   }
 }
@@ -208,40 +190,29 @@ function cleanForFirestore<T>(data: T): T {
 }
 
 export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentShopSlug, setCurrentShopSlug] = useState<string>(() => getCurrentShopSlug());
-  const [availableShops, setAvailableShops] = useState<ShopMetadata[]>([
-    {
-      slug: DEFAULT_SHOP_SLUG,
-      name: INITIAL_CONFIG.shopName,
-      ownerEmail: 'informaticasurr@gmail.com',
-      phone: INITIAL_CONFIG.adminPhone,
-      logoUrl: INITIAL_CONFIG.logoUrl
-    }
-  ]);
-
   const [config, setConfig] = useState<BarberShopConfig>(() =>
-    getSaved(BASE_STORAGE_KEYS.CONFIG, currentShopSlug, INITIAL_CONFIG)
+    getSaved(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG)
   );
   const [barbers, setBarbers] = useState<Barber[]>(() =>
-    getSaved(BASE_STORAGE_KEYS.BARBERS, currentShopSlug, INITIAL_BARBERS)
+    getSaved(BASE_STORAGE_KEYS.BARBERS, INITIAL_BARBERS)
   );
   const [services, setServices] = useState<ServiceItem[]>(() =>
-    getSaved(BASE_STORAGE_KEYS.SERVICES, currentShopSlug, INITIAL_SERVICES)
+    getSaved(BASE_STORAGE_KEYS.SERVICES, INITIAL_SERVICES)
   );
   const [appointments, setAppointments] = useState<Appointment[]>(() =>
-    getSaved(BASE_STORAGE_KEYS.APPOINTMENTS, currentShopSlug, INITIAL_APPOINTMENTS)
+    getSaved(BASE_STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS)
   );
   const [stories, setStories] = useState<StoryItem[]>(() =>
-    getSaved(BASE_STORAGE_KEYS.STORIES, currentShopSlug, INITIAL_STORIES)
+    getSaved(BASE_STORAGE_KEYS.STORIES, INITIAL_STORIES)
   );
   const [gallery, setGallery] = useState<GalleryItem[]>(() =>
-    getSaved(BASE_STORAGE_KEYS.GALLERY, currentShopSlug, INITIAL_GALLERY)
+    getSaved(BASE_STORAGE_KEYS.GALLERY, INITIAL_GALLERY)
   );
   const [reviews, setReviews] = useState<ReviewItem[]>(() =>
-    getSaved(BASE_STORAGE_KEYS.REVIEWS, currentShopSlug, INITIAL_REVIEWS)
+    getSaved(BASE_STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS)
   );
   const [promos, setPromos] = useState<PushPromo[]>(() =>
-    getSaved(BASE_STORAGE_KEYS.PROMOS, currentShopSlug, INITIAL_PROMOS)
+    getSaved(BASE_STORAGE_KEYS.PROMOS, INITIAL_PROMOS)
   );
 
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
@@ -264,124 +235,38 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       MASTER_SUPERADMIN_EMAILS.some((m) => m.toLowerCase() === currentUser.email?.toLowerCase().trim())
   );
 
-  // Helper function to push updates to Firebase Firestore Cloud for CURRENT shop
+  // Helper function to push updates to Firebase Firestore Cloud for the barber shop
   const saveToCloud = async (partialData: Record<string, any>) => {
     try {
-      const activeSlug = currentShopSlug || DEFAULT_SHOP_SLUG;
-      const shopDocRef = doc(db, 'shops', activeSlug);
       const payload = cleanForFirestore({
         ...partialData,
-        shopSlug: activeSlug,
         lastUpdated: new Date().toISOString()
       });
-      await setDoc(shopDocRef, payload, { merge: true });
 
-      // Also update registry metadata
-      const registryDocRef = doc(db, 'shops_registry', activeSlug);
-      await setDoc(
-        registryDocRef,
-        cleanForFirestore({
-          slug: activeSlug,
-          name: partialData.config?.shopName || config.shopName,
-          ownerEmail: partialData.ownerEmail || config.allowedAdminEmails?.[0] || 'informaticasurr@gmail.com',
-          allowedAdminEmails: partialData.config?.allowedAdminEmails || config.allowedAdminEmails || MASTER_SUPERADMIN_EMAILS,
-          phone: partialData.config?.phone || config.phone,
-          logoUrl: partialData.config?.logoUrl || config.logoUrl,
-          lastUpdated: new Date().toISOString()
-        }),
-        { merge: true }
-      );
+      // Write to unified main document
+      await setDoc(doc(db, 'barbershop', 'main'), payload, { merge: true });
+
+      // Also mirror to 'shops/elias' for backwards compatibility
+      setDoc(doc(db, 'shops', 'elias'), payload, { merge: true }).catch(() => {});
 
       setIsCloudSynced(true);
       setCloudSyncError(null);
       setLastCloudSyncTime(new Date().toLocaleTimeString());
     } catch (e: any) {
-      console.warn(`Nota de sincronización Firestore (${currentShopSlug}):`, e);
+      console.warn('Nota de sincronización Firestore:', e);
       if (e?.message?.includes('Cloud Firestore API') || e?.code === 'permission-denied') {
         setCloudSyncError('Cloud Firestore no está activada en Firebase Console.');
       }
     }
   };
 
-  // Listen to URL changes for shop routing & synchronize state
-  useEffect(() => {
-    const handleUrlChange = () => {
-      const detectedSlug = getCurrentShopSlug();
-      if (detectedSlug !== currentShopSlug) {
-        setCurrentShopSlug(detectedSlug);
-      }
-    };
-
-    window.addEventListener('popstate', handleUrlChange);
-    window.addEventListener('hashchange', handleUrlChange);
-    return () => {
-      window.removeEventListener('popstate', handleUrlChange);
-      window.removeEventListener('hashchange', handleUrlChange);
-    };
-  }, [currentShopSlug]);
-
-  // Synchronize state from localStorage when shop changes
-  useEffect(() => {
-    setConfig(getSaved(BASE_STORAGE_KEYS.CONFIG, currentShopSlug, INITIAL_CONFIG));
-    setBarbers(getSaved(BASE_STORAGE_KEYS.BARBERS, currentShopSlug, INITIAL_BARBERS));
-    setServices(getSaved(BASE_STORAGE_KEYS.SERVICES, currentShopSlug, INITIAL_SERVICES));
-    setAppointments(getSaved(BASE_STORAGE_KEYS.APPOINTMENTS, currentShopSlug, INITIAL_APPOINTMENTS));
-    setStories(getSaved(BASE_STORAGE_KEYS.STORIES, currentShopSlug, INITIAL_STORIES));
-    setGallery(getSaved(BASE_STORAGE_KEYS.GALLERY, currentShopSlug, INITIAL_GALLERY));
-    setReviews(getSaved(BASE_STORAGE_KEYS.REVIEWS, currentShopSlug, INITIAL_REVIEWS));
-    setPromos(getSaved(BASE_STORAGE_KEYS.PROMOS, currentShopSlug, INITIAL_PROMOS));
-  }, [currentShopSlug]);
-
-  // Listen to available shops registry in Firestore
+  // Listen to Firebase Real-time Firestore Cloud Data
   useEffect(() => {
     try {
-      const registryCol = collection(db, 'shops_registry');
-      const unsubscribe = onSnapshot(
-        registryCol,
-        (snapshot) => {
-          const loadedShops: ShopMetadata[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data() as ShopMetadata;
-            if (data && data.slug) {
-              loadedShops.push(data);
-            }
-          });
-
-          if (loadedShops.length > 0) {
-            // Ensure default shop is included
-            if (!loadedShops.some((s) => s.slug === DEFAULT_SHOP_SLUG)) {
-              loadedShops.unshift({
-                slug: DEFAULT_SHOP_SLUG,
-                name: INITIAL_CONFIG.shopName,
-                ownerEmail: 'informaticasurr@gmail.com',
-                phone: INITIAL_CONFIG.adminPhone
-              });
-            }
-            setAvailableShops(loadedShops);
-          }
-        },
-        (err) => {
-          console.warn('Shops registry listener note:', err);
-          if (err?.message?.includes('Cloud Firestore API') || err?.code === 'permission-denied') {
-            setCloudSyncError('Cloud Firestore no está activada en Firebase Console.');
-          }
-        }
-      );
-
-      return () => unsubscribe();
-    } catch (e: any) {
-      console.warn('Failed to attach shops registry listener:', e);
-    }
-  }, []);
-
-  // Listen to Firebase Real-time Firestore Cloud Data for current active shop
-  useEffect(() => {
-    try {
-      const activeSlug = currentShopSlug || DEFAULT_SHOP_SLUG;
-      const shopDocRef = doc(db, 'shops', activeSlug);
+      const mainDocRef = doc(db, 'barbershop', 'main');
 
       const unsubscribe = onSnapshot(
-        shopDocRef,
+        mainDocRef,
         (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
@@ -401,47 +286,42 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               setLastCloudSyncTime(new Date().toLocaleTimeString());
             }
           } else {
-            // If default shop doesn't exist yet, seed it with baseline
-            if (activeSlug === DEFAULT_SHOP_SLUG) {
-              const initialPayload = cleanForFirestore({
-                shopSlug: DEFAULT_SHOP_SLUG,
-                config: INITIAL_CONFIG,
-                barbers: INITIAL_BARBERS,
-                services: INITIAL_SERVICES,
-                appointments: INITIAL_APPOINTMENTS,
-                stories: INITIAL_STORIES,
-                gallery: INITIAL_GALLERY,
-                reviews: INITIAL_REVIEWS,
-                promos: INITIAL_PROMOS,
-                ownerEmail: 'informaticasurr@gmail.com',
-                allowedAdminEmails: MASTER_SUPERADMIN_EMAILS,
-                createdAt: new Date().toISOString(),
-                lastUpdated: new Date().toISOString()
-              });
-
-              setDoc(shopDocRef, initialPayload, { merge: true }).catch((err) =>
-                console.warn('Firestore initial seeding note:', err)
-              );
-
-              setDoc(
-                doc(db, 'shops_registry', DEFAULT_SHOP_SLUG),
-                {
-                  slug: DEFAULT_SHOP_SLUG,
-                  name: INITIAL_CONFIG.shopName,
+            // Check fallback 'shops/elias' doc if main doesn't exist
+            getDoc(doc(db, 'shops', 'elias')).then((fallbackSnap) => {
+              if (fallbackSnap.exists()) {
+                const fData = fallbackSnap.data();
+                if (fData?.config) setConfig((prev) => ({ ...prev, ...fData.config }));
+                if (Array.isArray(fData?.barbers)) setBarbers(fData.barbers);
+                if (Array.isArray(fData?.services)) setServices(fData.services);
+                if (Array.isArray(fData?.appointments)) setAppointments(fData.appointments);
+                if (Array.isArray(fData?.stories)) setStories(fData.stories);
+                if (Array.isArray(fData?.gallery)) setGallery(fData.gallery);
+                if (Array.isArray(fData?.reviews)) setReviews(fData.reviews);
+                if (Array.isArray(fData?.promos)) setPromos(fData.promos);
+                setIsCloudSynced(true);
+              } else {
+                // Initialize default seed if empty
+                const initialPayload = cleanForFirestore({
+                  config: INITIAL_CONFIG,
+                  barbers: INITIAL_BARBERS,
+                  services: INITIAL_SERVICES,
+                  appointments: INITIAL_APPOINTMENTS,
+                  stories: INITIAL_STORIES,
+                  gallery: INITIAL_GALLERY,
+                  reviews: INITIAL_REVIEWS,
+                  promos: INITIAL_PROMOS,
                   ownerEmail: 'informaticasurr@gmail.com',
-                  phone: INITIAL_CONFIG.adminPhone,
-                  createdAt: new Date().toISOString()
-                },
-                { merge: true }
-              ).catch((e) => console.warn('Registry initial seed note:', e));
-
-              setIsCloudSynced(true);
-              setCloudSyncError(null);
-            }
+                  allowedAdminEmails: MASTER_SUPERADMIN_EMAILS,
+                  createdAt: new Date().toISOString(),
+                  lastUpdated: new Date().toISOString()
+                });
+                setDoc(mainDocRef, initialPayload, { merge: true }).catch(() => {});
+              }
+            }).catch(() => {});
           }
         },
         (err) => {
-          console.warn(`Firestore snapshot error for shop ${activeSlug}:`, err);
+          console.warn('Firestore snapshot error:', err);
           if (err?.message?.includes('Cloud Firestore API') || err?.code === 'permission-denied') {
             setCloudSyncError('Cloud Firestore no está activada en Firebase Console.');
           }
@@ -450,12 +330,11 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       return () => unsubscribe();
     } catch (e: any) {
-      console.warn('Firestore shop listener setup note:', e);
+      console.warn('Firestore listener setup note:', e);
     }
-  }, [currentShopSlug]);
+  }, []);
 
-
-  // Helper to check if an email address is allowed as administrator for current shop or globally
+  // Helper to check if an email address is allowed as administrator
   const isEmailAuthorized = (email?: string | null): boolean => {
     if (!email) return false;
     const cleanEmail = email.toLowerCase().trim();
@@ -469,195 +348,8 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return true;
     }
 
-    // In Multi-tenant platform, any shop owner or allowed admin is authorized
-    const isOwnerOrAdminInAnyShop = availableShops.some(
-      (s) =>
-        s.ownerEmail?.toLowerCase().trim() === cleanEmail ||
-        s.allowedAdminEmails?.some((a) => a.toLowerCase().trim() === cleanEmail)
-    );
-    if (isOwnerOrAdminInAnyShop) {
-      return true;
-    }
-
-    // Allow all authenticated Google users into the admin portal so they can create their own barbershop
+    // Allow authenticated Google users
     return true;
-  };
-
-  // Switch active shop and change URL seamlessly
-  const switchShop = (slug: string) => {
-    const cleanSlug = slugify(slug || DEFAULT_SHOP_SLUG);
-    setCurrentShopSlug(cleanSlug);
-
-    // Load cached shop data immediately for instant responsive UI
-    const cachedConfig = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.CONFIG, cleanSlug), INITIAL_CONFIG);
-    const cachedBarbers = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.BARBERS, cleanSlug), INITIAL_BARBERS);
-    const cachedServices = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.SERVICES, cleanSlug), INITIAL_SERVICES);
-    const cachedAppointments = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.APPOINTMENTS, cleanSlug), INITIAL_APPOINTMENTS);
-    const cachedStories = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.STORIES, cleanSlug), INITIAL_STORIES);
-    const cachedGallery = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.GALLERY, cleanSlug), INITIAL_GALLERY);
-    const cachedReviews = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.REVIEWS, cleanSlug), INITIAL_REVIEWS);
-    const cachedPromos = getSaved(getShopStorageKey(BASE_STORAGE_KEYS.PROMOS, cleanSlug), INITIAL_PROMOS);
-
-    setConfig(cachedConfig);
-    setBarbers(cachedBarbers);
-    setServices(cachedServices);
-    setAppointments(cachedAppointments);
-    setStories(cachedStories);
-    setGallery(cachedGallery);
-    setReviews(cachedReviews);
-    setPromos(cachedPromos);
-
-    navigateToShop(cleanSlug, isAdmin);
-    triggerPushNotification(
-      'Cambiando de Barbería 💈',
-      `Has cambiado a la barbería: ${cleanSlug}`
-    );
-  };
-
-  // Create a brand new independent shop (instant local-first + background cloud sync)
-  const createNewShop = async (
-    payload: CreateShopPayload
-  ): Promise<{ success: boolean; slug?: string; error?: string }> => {
-    try {
-      const rawSlug = payload.slug || payload.name;
-      const cleanSlug = slugify(rawSlug);
-
-      if (!cleanSlug || cleanSlug.length < 2) {
-        return { success: false, error: 'El identificador / enlace debe tener al menos 2 caracteres.' };
-      }
-
-      if (['admin', 'api', 'assets', 'dist', 'login'].includes(cleanSlug)) {
-        return { success: false, error: 'Este identificador está reservado. Por favor elige otro.' };
-      }
-
-      const ownerEmail = payload.ownerEmail || currentUser?.email || 'informaticasurr@gmail.com';
-
-      const newShopConfig: BarberShopConfig = {
-        ...INITIAL_CONFIG,
-        shopName: payload.name.trim(),
-        slogan: payload.slogan?.trim() || INITIAL_CONFIG.slogan,
-        adminPhone: payload.phone?.trim() || INITIAL_CONFIG.adminPhone,
-        whatsappNumber: payload.phone?.trim() ? payload.phone.replace(/[^0-9]/g, '') : INITIAL_CONFIG.whatsappNumber,
-        address: payload.address?.trim() || INITIAL_CONFIG.address,
-        allowedAdminEmails: [ownerEmail, ...MASTER_SUPERADMIN_EMAILS]
-      };
-
-      const newShopData = cleanForFirestore({
-        shopSlug: cleanSlug,
-        config: newShopConfig,
-        barbers: INITIAL_BARBERS,
-        services: INITIAL_SERVICES,
-        appointments: [],
-        stories: INITIAL_STORIES,
-        gallery: INITIAL_GALLERY,
-        reviews: INITIAL_REVIEWS,
-        promos: INITIAL_PROMOS,
-        ownerEmail,
-        allowedAdminEmails: [ownerEmail, ...MASTER_SUPERADMIN_EMAILS],
-        createdAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString()
-      });
-
-      // 1. Immediately cache in localStorage for instant availability
-      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.CONFIG, cleanSlug), newShopConfig);
-      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.BARBERS, cleanSlug), INITIAL_BARBERS);
-      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.SERVICES, cleanSlug), INITIAL_SERVICES);
-      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.APPOINTMENTS, cleanSlug), []);
-      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.STORIES, cleanSlug), INITIAL_STORIES);
-      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.GALLERY, cleanSlug), INITIAL_GALLERY);
-      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.REVIEWS, cleanSlug), INITIAL_REVIEWS);
-      saveItem(getShopStorageKey(BASE_STORAGE_KEYS.PROMOS, cleanSlug), INITIAL_PROMOS);
-
-      // 2. Add to registry metadata state
-      const metadata: ShopMetadata = {
-        slug: cleanSlug,
-        name: payload.name.trim(),
-        ownerEmail,
-        allowedAdminEmails: [ownerEmail, ...MASTER_SUPERADMIN_EMAILS],
-        phone: payload.phone?.trim() || INITIAL_CONFIG.adminPhone,
-        logoUrl: INITIAL_CONFIG.logoUrl,
-        createdAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString()
-      };
-
-      setAvailableShops((prev) => {
-        const filtered = prev.filter((s) => s.slug !== cleanSlug);
-        return [...filtered, metadata];
-      });
-
-      // 3. Immediately switch active state and navigate
-      setCurrentShopSlug(cleanSlug);
-      setConfig(newShopConfig);
-      setBarbers(INITIAL_BARBERS);
-      setServices(INITIAL_SERVICES);
-      setAppointments([]);
-      setStories(INITIAL_STORIES);
-      setGallery(INITIAL_GALLERY);
-      setReviews(INITIAL_REVIEWS);
-      setPromos(INITIAL_PROMOS);
-      navigateToShop(cleanSlug, isAdmin);
-
-      // 4. Background non-blocking Firestore Cloud Sync
-      (async () => {
-        try {
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Firestore sync timed out')), 4000)
-          );
-          await Promise.race([
-            Promise.all([
-              setDoc(doc(db, 'shops', cleanSlug), newShopData, { merge: true }),
-              setDoc(doc(db, 'shops_registry', cleanSlug), metadata, { merge: true })
-            ]),
-            timeoutPromise
-          ]);
-          setIsCloudSynced(true);
-          setLastCloudSyncTime(new Date().toLocaleTimeString());
-        } catch (cloudErr) {
-          console.warn('Background Firestore cloud write note:', cloudErr);
-        }
-      })();
-
-      triggerPushNotification(
-        '¡Nueva Barbería Creada! 🚀',
-        `La barbería "${payload.name}" ha sido creada exitosamente con el enlace /${cleanSlug}`
-      );
-
-      return { success: true, slug: cleanSlug };
-    } catch (e: any) {
-      console.error('Error creating new shop:', e);
-      return { success: false, error: e?.message || 'Error al crear la nueva barbería.' };
-    }
-  };
-
-  // Delete a shop (except default shop)
-  const deleteShop = async (slug: string): Promise<{ success: boolean; error?: string }> => {
-    const cleanSlug = slugify(slug);
-    if (cleanSlug === DEFAULT_SHOP_SLUG) {
-      return { success: false, error: 'No es posible eliminar la barbería principal.' };
-    }
-
-    try {
-      setAvailableShops((prev) => prev.filter((s) => s.slug !== cleanSlug));
-
-      if (currentShopSlug === cleanSlug) {
-        switchShop(DEFAULT_SHOP_SLUG);
-      }
-
-      // Non-blocking Firestore delete
-      (async () => {
-        try {
-          await deleteDoc(doc(db, 'shops', cleanSlug));
-          await deleteDoc(doc(db, 'shops_registry', cleanSlug));
-        } catch (err) {
-          console.warn('Background Firestore delete note:', err);
-        }
-      })();
-
-      return { success: true };
-    } catch (e: any) {
-      console.error('Error deleting shop:', e);
-      return { success: false, error: e?.message || 'Error al eliminar el negocio.' };
-    }
   };
 
   // Listen to Firebase Auth state
@@ -679,22 +371,22 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     return () => unsubscribe();
-  }, [config.allowedAdminEmails, currentShopSlug]);
+  }, [config.allowedAdminEmails]);
 
   // Sync with schema.org SEO on load and changes
   useEffect(() => {
     updateBarberShopSchema(config, services, barbers, reviews);
   }, [config, services, barbers, reviews]);
 
-  // Persist state changes to localStorage as offline cache for current shop
-  useEffect(() => { saveItem(getShopStorageKey(BASE_STORAGE_KEYS.CONFIG, currentShopSlug), config); }, [config, currentShopSlug]);
-  useEffect(() => { saveItem(getShopStorageKey(BASE_STORAGE_KEYS.BARBERS, currentShopSlug), barbers); }, [barbers, currentShopSlug]);
-  useEffect(() => { saveItem(getShopStorageKey(BASE_STORAGE_KEYS.SERVICES, currentShopSlug), services); }, [services, currentShopSlug]);
-  useEffect(() => { saveItem(getShopStorageKey(BASE_STORAGE_KEYS.APPOINTMENTS, currentShopSlug), appointments); }, [appointments, currentShopSlug]);
-  useEffect(() => { saveItem(getShopStorageKey(BASE_STORAGE_KEYS.STORIES, currentShopSlug), stories); }, [stories, currentShopSlug]);
-  useEffect(() => { saveItem(getShopStorageKey(BASE_STORAGE_KEYS.GALLERY, currentShopSlug), gallery); }, [gallery, currentShopSlug]);
-  useEffect(() => { saveItem(getShopStorageKey(BASE_STORAGE_KEYS.REVIEWS, currentShopSlug), reviews); }, [reviews, currentShopSlug]);
-  useEffect(() => { saveItem(getShopStorageKey(BASE_STORAGE_KEYS.PROMOS, currentShopSlug), promos); }, [promos, currentShopSlug]);
+  // Persist state changes to localStorage as offline cache
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.CONFIG, config); }, [config]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.BARBERS, barbers); }, [barbers]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.SERVICES, services); }, [services]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, appointments); }, [appointments]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.STORIES, stories); }, [stories]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.GALLERY, gallery); }, [gallery]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.REVIEWS, reviews); }, [reviews]);
+  useEffect(() => { saveItem(BASE_STORAGE_KEYS.PROMOS, promos); }, [promos]);
 
   const setClientPhone = (phone: string) => {
     setClientPhoneState(phone);
@@ -787,8 +479,8 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       triggerPushNotification(
-        '¡Contraseña Personal Guardada! 🔒',
-        `La contraseña de administrador para ${cleanEmail} ha sido configurada y guardada en Firebase exitosamente.`
+        '¡Contraseña Guardada! 🔒',
+        `La contraseña de administrador para ${cleanEmail} ha sido configurada exitosamente.`
       );
 
       return { success: true };
@@ -811,7 +503,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         sessionStorage.removeItem('barberia_admin_auth');
         return {
           success: false,
-          error: `Acceso Denegado: El correo "${user.email || 'desconocido'}" no está en la lista de administradores autorizados de esta barbería.`
+          error: `Acceso Denegado: El correo "${user.email || 'desconocido'}" no está en la lista de administradores autorizados.`
         };
       }
 
@@ -1013,13 +705,16 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ...storyData,
       id: `story-${Date.now()}`,
       createdAt: new Date().toISOString(),
-      viewsCount: 1
+      viewsCount: Math.floor(Math.random() * 10) + 1
     };
+
     setStories((prev) => {
       const updated = [newStory, ...prev];
       saveToCloud({ stories: updated });
       return updated;
     });
+
+    triggerPushNotification('Nueva Historia Publicada', `Se publicó la historia "${newStory.title}".`);
   };
 
   const deleteStory = (id: string) => {
@@ -1043,18 +738,21 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const newItem: GalleryItem = {
       ...itemData,
       id: `gal-${Date.now()}`,
-      likes: Math.floor(Math.random() * 20) + 5
+      likes: 0
     };
+
     setGallery((prev) => {
       const updated = [newItem, ...prev];
       saveToCloud({ gallery: updated });
       return updated;
     });
+
+    triggerPushNotification('Nuevo Corte en Galería 📸', `Se añadió el trabajo de "${newItem.title}" a la galería.`);
   };
 
   const deleteGalleryItem = (id: string) => {
     setGallery((prev) => {
-      const updated = prev.filter((g) => g.id !== id);
+      const updated = prev.filter((item) => item.id !== id);
       saveToCloud({ gallery: updated });
       return updated;
     });
@@ -1062,7 +760,7 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const likeGalleryItem = (id: string) => {
     setGallery((prev) => {
-      const updated = prev.map((g) => (g.id === id ? { ...g, likes: g.likes + 1 } : g));
+      const updated = prev.map((item) => (item.id === id ? { ...item, likes: item.likes + 1 } : item));
       saveToCloud({ gallery: updated });
       return updated;
     });
@@ -1073,15 +771,25 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const newReview: ReviewItem = {
       ...reviewData,
       id: `rev-${Date.now()}`,
-      date: 'Reciente',
-      verified: true
+      date: new Date().toLocaleDateString('es-AR', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      }),
+      verified: true,
+      highlighted: false
     };
+
     setReviews((prev) => {
       const updated = [newReview, ...prev];
       saveToCloud({ reviews: updated });
       return updated;
     });
-    triggerPushNotification('¡Nueva Reseña Recibida! ⭐', `${reviewData.clientName} ha dejado una calificación de ${reviewData.rating} estrellas.`);
+
+    triggerPushNotification(
+      '¡Nueva Reseña Recibida! ⭐',
+      `${newReview.clientName} ha calificado el servicio con ${newReview.rating} estrellas.`
+    );
   };
 
   const toggleHighlightReview = (id: string) => {
@@ -1113,14 +821,16 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const newPromo: PushPromo = {
       ...promoData,
       id: `promo-${Date.now()}`,
-      date: 'Ahora'
+      date: new Date().toLocaleDateString('es-AR')
     };
+
     setPromos((prev) => {
       const updated = [newPromo, ...prev];
       saveToCloud({ promos: updated });
       return updated;
     });
-    triggerPushNotification(promoData.title, promoData.message);
+
+    triggerPushNotification(newPromo.title, newPromo.message);
   };
 
   const deletePromo = (id: string) => {
@@ -1131,13 +841,11 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   };
 
-  // Backup & Cloud Sync
+  // Backup & Restore
   const exportFullBackup = (): string => {
     const backupData = {
       version: '1.0',
-      shopSlug: currentShopSlug,
       exportedAt: new Date().toISOString(),
-      shopName: config.shopName,
       config,
       barbers,
       services,
@@ -1153,14 +861,16 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const importFullBackup = (jsonString: string): boolean => {
     try {
       const data = JSON.parse(jsonString);
+      if (!data || typeof data !== 'object') return false;
+
       if (data.config) setConfig(data.config);
-      if (data.barbers) setBarbers(data.barbers);
-      if (data.services) setServices(data.services);
-      if (data.appointments) setAppointments(data.appointments);
-      if (data.stories) setStories(data.stories);
-      if (data.gallery) setGallery(data.gallery);
-      if (data.reviews) setReviews(data.reviews);
-      if (data.promos) setPromos(data.promos);
+      if (Array.isArray(data.barbers)) setBarbers(data.barbers);
+      if (Array.isArray(data.services)) setServices(data.services);
+      if (Array.isArray(data.appointments)) setAppointments(data.appointments);
+      if (Array.isArray(data.stories)) setStories(data.stories);
+      if (Array.isArray(data.gallery)) setGallery(data.gallery);
+      if (Array.isArray(data.reviews)) setReviews(data.reviews);
+      if (Array.isArray(data.promos)) setPromos(data.promos);
 
       saveToCloud({
         config: data.config,
@@ -1173,9 +883,14 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         promos: data.promos
       });
 
+      triggerPushNotification(
+        '¡Copia de Seguridad Restaurada! 💾',
+        'Todos los datos y configuraciones se han cargado exitosamente.'
+      );
+
       return true;
     } catch (e) {
-      console.error('Error importing backup:', e);
+      console.error('Error importing backup JSON:', e);
       return false;
     }
   };
@@ -1200,6 +915,11 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       reviews: INITIAL_REVIEWS,
       promos: INITIAL_PROMOS
     });
+
+    triggerPushNotification(
+      'Datos Restablecidos 🔄',
+      'La barbería ha sido restablecida a sus valores y plantillas por defecto.'
+    );
   };
 
   return (
@@ -1221,11 +941,6 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isCloudSynced,
         cloudSyncError,
         lastCloudSyncTime,
-        currentShopSlug,
-        availableShops,
-        switchShop,
-        createNewShop,
-        deleteShop,
         setClientPhone,
         loginAdmin,
         verifyPin: loginAdmin,
@@ -1277,4 +992,3 @@ export const useBarber = () => {
   }
   return context;
 };
-
