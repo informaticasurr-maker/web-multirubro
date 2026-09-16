@@ -5,13 +5,13 @@ import { getDatabase, Database } from 'firebase/database';
 import { FirebaseCustomConfig } from '../types';
 
 export const OFFICIAL_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCypDN-qT10QCrXr47ynDnmdX-28AjwuN0", // inspector:ignore
-  authDomain: "web-multirubro.firebaseapp.com",
-  databaseURL: "https://web-multirubro-default-rtdb.firebaseio.com",
-  projectId: "web-multirubro",
-  storageBucket: "web-multirubro.firebasestorage.app",
-  messagingSenderId: "1026921238822",
-  appId: "1:1026921238822:web:7f23715280a64e726c71e7"
+  apiKey: "AIzaSyAzMcE4016tVdGaFkVqLJkyb96Hfcn2Of8", // inspector:ignore
+  authDomain: "eliascjbarber.firebaseapp.com",
+  databaseURL: "https://eliascjbarber-default-rtdb.firebaseio.com",
+  projectId: "eliascjbarber",
+  storageBucket: "eliascjbarber.firebasestorage.app",
+  messagingSenderId: "493099757499",
+  appId: "1:493099757499:web:608dfaa9d0d46ca9f25e9e"
 };
 
 // Default configuration with user's official project parameters or custom overrides

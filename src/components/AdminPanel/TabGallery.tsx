@@ -54,9 +54,9 @@ export const TabGallery: React.FC = () => {
       } else {
         // Compress photo for snappy loading
         const compressed = await compressImageFile(file, {
-          maxWidth: 1200,
-          maxHeight: 1200,
-          quality: 0.85
+          maxWidth: 700,
+          maxHeight: 700,
+          quality: 0.70
         });
         setMediaType('image');
         setMediaUrl(compressed);

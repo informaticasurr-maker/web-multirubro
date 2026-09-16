@@ -1,21 +1,5 @@
 {
   "projects": {
-    "default": "web-multirubro"
-  },
-  "targets": {
-    "web-multirubro": {
-      "hosting": {
-        "eliasbarbershop": [
-          "eliasbarbershop"
-        ],
-        "eliasbarber": [
-          "eliasbarber"
-        ],
-        "default": [
-          "web-multirubro"
-        ]
-      }
-    }
-  },
-  "etags": {}
+    "default": "eliascjbarber"
+  }
 }

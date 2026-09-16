@@ -16,7 +16,7 @@ import {
   Calendar,
   Flame
 } from 'lucide-react';
-import { compressImageFile, validateAndReadVideoFile } from '../../utils/mediaUpload';
+import { compressImageFile, validateAndReadVideoFile, generateVideoPosterThumbnail } from '../../utils/mediaUpload';
 
 export const TabStories: React.FC = () => {
   const { stories, barbers, addStory, deleteStory } = useBarber();
@@ -28,6 +28,7 @@ export const TabStories: React.FC = () => {
   const [title, setTitle] = useState('');
   const [caption, setCaption] = useState('');
   const [customTag, setCustomTag] = useState('');
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [selectedBarberId, setSelectedBarberId] = useState(barbers[0]?.id || '');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -47,8 +48,10 @@ export const TabStories: React.FC = () => {
       if (file.type.startsWith('video/')) {
         // Enforce maximum 120 seconds (2 minutes)
         const result = await validateAndReadVideoFile(file, 120);
+        const poster = await generateVideoPosterThumbnail(file);
         setMediaType('video');
         setMediaUrl(result.dataUrl);
+        setThumbnailUrl(poster);
         setVideoInfo({
           durationText: result.formattedDuration,
           sizeMb: result.fileSizeMb
@@ -56,12 +59,13 @@ export const TabStories: React.FC = () => {
       } else {
         // Compress photo for snappy loading
         const compressed = await compressImageFile(file, {
-          maxWidth: 1080,
-          maxHeight: 1920,
-          quality: 0.85
+          maxWidth: 500,
+          maxHeight: 800,
+          quality: 0.55
         });
         setMediaType('image');
         setMediaUrl(compressed);
+        setThumbnailUrl('');
       }
     } catch (err: any) {
       setUploadError(err?.message || 'Error al procesar el archivo seleccionado.');
@@ -86,6 +90,7 @@ export const TabStories: React.FC = () => {
 
     addStory({
       mediaUrl: mediaUrl.trim(),
+      thumbnailUrl: thumbnailUrl.trim() || undefined,
       mediaType,
       title: title.trim(),
       caption: caption.trim() || (scope === 'dia' ? 'Corte del día en la barbería.' : 'Novedad de la barbería.'),
@@ -98,6 +103,7 @@ export const TabStories: React.FC = () => {
 
     setIsAdding(false);
     setMediaUrl('');
+    setThumbnailUrl('');
     setTitle('');
     setCaption('');
     setCustomTag('');

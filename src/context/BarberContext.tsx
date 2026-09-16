@@ -29,16 +29,20 @@ import {
   doc,
   setDoc,
   getDoc,
-  onSnapshot
+  onSnapshot,
+  collection,
+  deleteDoc
 } from 'firebase/firestore';
 import {
   ref as refRtdb,
   set as setRtdb,
   update as updateRtdb,
   onValue as onValueRtdb,
-  get as getRtdb
+  get as getRtdb,
+  remove as removeRtdb
 } from 'firebase/database';
 import { saveToIDB, loadFromIDB } from '../utils/idbStorage';
+import { compressBase64DataUrl } from '../utils/mediaUpload';
 
 interface BarberContextType {
   config: BarberShopConfig;
@@ -201,23 +205,25 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [config, setConfig] = useState<BarberShopConfig>(() => {
     const saved = getSaved(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG);
     if (saved) {
-      if (
+      const isLegacyObelisco =
         saved.neighborhood === 'Balvanera / Abasto' ||
-        saved.neighborhood === 'Ciudad Evita' ||
         saved.neighborhood?.includes('Balvanera') ||
         saved.neighborhood?.includes('Abasto') ||
         saved.address?.includes('Corrientes 2450') ||
-        saved.coordinates?.lat === -34.6037 ||
-        saved.coordinates?.lat === -34.6047 ||
-        saved.coordinates?.lat === -34.7185
-      ) {
+        (saved.coordinates?.lat && Math.abs(saved.coordinates.lat - -34.8219) < 0.05) ||
+        saved.googleMapsUrl?.includes('-34.8219') ||
+        saved.googleMapsUrl?.includes('-58.4897') ||
+        saved.wazeUrl?.includes('-34.8219') ||
+        saved.wazeUrl?.includes('-58.4897');
+
+      if (isLegacyObelisco) {
         saved.shopName = saved.shopName === "The Gentleman's Blade Barbería" ? "ELIAS-barbershop" : (saved.shopName || "ELIAS-barbershop");
         saved.address = "Evita 1131";
         saved.neighborhood = "El Jagüel";
         saved.city = "Buenos Aires";
-        saved.coordinates = { lat: -34.8322, lng: -58.4988 };
-        saved.googleMapsUrl = "https://maps.google.com/?q=Evita+1131,+El+Jagüel,+Buenos+Aires";
-        saved.wazeUrl = "https://waze.com/ul?q=Evita+1131,+El+Jagüel,+Buenos+Aires&navigate=yes";
+        saved.coordinates = { lat: -34.8252, lng: -58.4988 };
+        saved.googleMapsUrl = "https://www.google.com/maps?q=-34.8252,-58.4988";
+        saved.wazeUrl = "https://waze.com/ul?ll=-34.8252,-58.4988&navigate=yes";
         saveItem(BASE_STORAGE_KEYS.CONFIG, saved);
       }
     }
@@ -233,10 +239,10 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     getSaved(BASE_STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS)
   );
   const [stories, setStories] = useState<StoryItem[]>(() =>
-    getSaved(BASE_STORAGE_KEYS.STORIES, INITIAL_STORIES)
+    getSaved(BASE_STORAGE_KEYS.STORIES, [])
   );
   const [gallery, setGallery] = useState<GalleryItem[]>(() =>
-    getSaved(BASE_STORAGE_KEYS.GALLERY, INITIAL_GALLERY)
+    getSaved(BASE_STORAGE_KEYS.GALLERY, [])
   );
   const [reviews, setReviews] = useState<ReviewItem[]>(() =>
     getSaved(BASE_STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS)
@@ -265,34 +271,136 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     MASTER_SUPERADMIN_EMAILS.some((m) => m.toLowerCase() === currentUser.email?.toLowerCase().trim())
   );
 
-  // Helper function to push updates to Firebase Firestore and Realtime Database for the barber shop
+  // Helper function to push updates to Firebase Firestore for the barber shop
   const saveToCloud = async (partialData: Record<string, any>) => {
     try {
-      const payload = cleanForFirestore({
-        ...partialData,
+      const updatesToSave: Record<string, any> = {
         lastUpdated: new Date().toISOString()
-      });
+      };
 
-      // 1. Write to Firestore unified main document
-      setDoc(doc(db, 'barbershop', 'main'), payload, { merge: true }).catch((err) => {
-        console.warn('Firestore setDoc note:', err);
-      });
+      if (partialData.config) {
+        updatesToSave.config = partialData.config;
+      }
 
-      // Mirror to 'shops/elias' for backwards compatibility
-      setDoc(doc(db, 'shops', 'elias'), payload, { merge: true }).catch(() => { });
-
-      // 2. Write to Firebase Realtime Database using update (merge, non-destructive)
-      if (rtdb) {
-        updateRtdb(refRtdb(rtdb, 'barbershop/main'), payload).catch((err) => {
-          console.warn('Realtime Database update error:', err);
+      if (partialData.barbers && Array.isArray(partialData.barbers)) {
+        const sanitizedBarbers = await Promise.all(
+          partialData.barbers.map(async (b: Barber) => {
+            if (b.photoUrl && b.photoUrl.startsWith('data:image/') && b.photoUrl.length > 80000) {
+              const compressed = await compressBase64DataUrl(b.photoUrl, 400, 400, 0.65);
+              return { ...b, photoUrl: compressed };
+            }
+            return b;
+          })
+        );
+        updatesToSave.barbers = sanitizedBarbers;
+        sanitizedBarbers.forEach((b) => {
+          setDoc(doc(db, 'barbers', b.id), cleanForFirestore(b), { merge: true }).catch(() => { });
         });
+      }
+
+      if (partialData.services && Array.isArray(partialData.services)) {
+        const sanitizedServices = await Promise.all(
+          partialData.services.map(async (srv: ServiceItem) => {
+            if (srv.image && srv.image.startsWith('data:image/') && srv.image.length > 80000) {
+              const compressed = await compressBase64DataUrl(srv.image, 800, 600, 0.65);
+              return { ...srv, image: compressed };
+            }
+            return srv;
+          })
+        );
+        updatesToSave.services = sanitizedServices;
+        sanitizedServices.forEach((srv) => {
+          setDoc(doc(db, 'services', srv.id), cleanForFirestore(srv), { merge: true }).catch(() => { });
+        });
+      }
+
+      if (partialData.appointments) {
+        updatesToSave.appointments = partialData.appointments;
+      }
+
+      if (partialData.stories && Array.isArray(partialData.stories)) {
+        const sanitizedStories = await Promise.all(
+          partialData.stories.map(async (s: StoryItem) => {
+            let media = s.mediaUrl;
+            if (media && media.startsWith('data:image/') && media.length > 80000) {
+              media = await compressBase64DataUrl(media, 500, 800, 0.55);
+            }
+            let thumb = s.thumbnailUrl;
+            if (thumb && thumb.startsWith('data:image/') && thumb.length > 80000) {
+              thumb = await compressBase64DataUrl(thumb, 400, 600, 0.55);
+            }
+            return {
+              ...s,
+              mediaUrl: media,
+              thumbnailUrl: thumb || undefined
+            };
+          })
+        );
+        updatesToSave.stories = sanitizedStories;
+
+        // Persist each individual story in dedicated Firestore collection and Realtime Database
+        sanitizedStories.forEach((st) => {
+          if (st && st.id) {
+            setDoc(doc(db, 'stories', st.id), cleanForFirestore(st), { merge: true }).catch(() => { });
+            if (rtdb) {
+              setRtdb(refRtdb(rtdb, `stories/${st.id}`), cleanForFirestore(st)).catch(() => { });
+            }
+          }
+        });
+      }
+
+      if (partialData.gallery && Array.isArray(partialData.gallery)) {
+        const sanitizedGallery = await Promise.all(
+          partialData.gallery.map(async (g: GalleryItem) => {
+            if (g.image && g.image.startsWith('data:image/') && g.image.length > 80000) {
+              const compressed = await compressBase64DataUrl(g.image, 800, 600, 0.65);
+              return { ...g, image: compressed };
+            }
+            return g;
+          })
+        );
+        updatesToSave.gallery = sanitizedGallery;
+      }
+
+      if (partialData.reviews) {
+        updatesToSave.reviews = partialData.reviews;
+      }
+
+      if (partialData.promos) {
+        updatesToSave.promos = partialData.promos;
+      }
+
+      // Preserve any other custom key passed in partialData
+      Object.keys(partialData).forEach((key) => {
+        if (!['config', 'barbers', 'services', 'appointments', 'stories', 'gallery', 'reviews', 'promos'].includes(key)) {
+          updatesToSave[key] = partialData[key];
+        }
+      });
+
+      const payload = cleanForFirestore(updatesToSave);
+
+      // Write only the specified partial updates to Firestore main doc using merge: true
+      try {
+        await setDoc(doc(db, 'barbershop', 'main'), payload, { merge: true });
+        setDoc(doc(db, 'shops', 'elias'), payload, { merge: true }).catch(() => { });
+      } catch (docErr) {
+        console.warn('Firestore main document save warning (individual collections maintained):', docErr);
+      }
+
+      if (rtdb) {
+        try {
+          await updateRtdb(refRtdb(rtdb, 'barbershop/main'), payload);
+        } catch (rtdbErr) {
+          console.warn('Realtime Database main node update note:', rtdbErr);
+        }
       }
 
       setIsCloudSynced(true);
       setCloudSyncError(null);
       setLastCloudSyncTime(new Date().toLocaleTimeString());
     } catch (e: any) {
-      console.warn('Nota de sincronización Cloud:', e);
+      console.warn('Nota de sincronización Cloud principal:', e);
+      setCloudSyncError(e?.message || 'Error al guardar en la nube');
     }
   };
 
@@ -301,23 +409,25 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!data) return;
     if (data.config && typeof data.config === 'object') {
       const incomingConfig = { ...data.config };
-      if (
+      const isLegacyObelisco =
         incomingConfig.neighborhood === 'Balvanera / Abasto' ||
-        incomingConfig.neighborhood === 'Ciudad Evita' ||
         incomingConfig.neighborhood?.includes('Balvanera') ||
         incomingConfig.neighborhood?.includes('Abasto') ||
         incomingConfig.address?.includes('Corrientes 2450') ||
-        incomingConfig.coordinates?.lat === -34.6037 ||
-        incomingConfig.coordinates?.lat === -34.6047 ||
-        incomingConfig.coordinates?.lat === -34.7185
-      ) {
-        incomingConfig.shopName = incomingConfig.shopName || "ELIAS-barbershop";
+        (incomingConfig.coordinates?.lat && Math.abs(incomingConfig.coordinates.lat - -34.8219) < 0.05) ||
+        incomingConfig.googleMapsUrl?.includes('-34.8219') ||
+        incomingConfig.googleMapsUrl?.includes('-58.4897') ||
+        incomingConfig.wazeUrl?.includes('-34.8219') ||
+        incomingConfig.wazeUrl?.includes('-58.4897');
+
+      if (isLegacyObelisco) {
+        incomingConfig.shopName = incomingConfig.shopName === "The Gentleman's Blade Barbería" ? "ELIAS-barbershop" : (incomingConfig.shopName || "ELIAS-barbershop");
         incomingConfig.address = "Evita 1131";
         incomingConfig.neighborhood = "El Jagüel";
         incomingConfig.city = "Buenos Aires";
-        incomingConfig.coordinates = { lat: -34.8322, lng: -58.4988 };
-        incomingConfig.googleMapsUrl = "https://maps.google.com/?q=Evita+1131,+El+Jagüel,+Buenos+Aires";
-        incomingConfig.wazeUrl = "https://waze.com/ul?q=Evita+1131,+El+Jagüel,+Buenos+Aires&navigate=yes";
+        incomingConfig.coordinates = { lat: -34.8252, lng: -58.4988 };
+        incomingConfig.googleMapsUrl = "https://www.google.com/maps?q=-34.8252,-58.4988";
+        incomingConfig.wazeUrl = "https://waze.com/ul?ll=-34.8252,-58.4988&navigate=yes";
       }
       setConfig((prev) => {
         const updated = { ...prev, ...incomingConfig };
@@ -325,11 +435,11 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return updated;
       });
     }
-    if (Array.isArray(data.barbers)) {
+    if (Array.isArray(data.barbers) && data.barbers.length > 0) {
       setBarbers(data.barbers);
       saveItem(BASE_STORAGE_KEYS.BARBERS, data.barbers);
     }
-    if (Array.isArray(data.services)) {
+    if (Array.isArray(data.services) && data.services.length > 0) {
       setServices(data.services);
       saveItem(BASE_STORAGE_KEYS.SERVICES, data.services);
     }
@@ -337,21 +447,21 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAppointments(data.appointments);
       saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, data.appointments);
     }
-    if (Array.isArray(data.stories)) {
+    if (Array.isArray(data.stories) && data.stories.length > 0) {
       setStories(data.stories);
       saveToIDB(BASE_STORAGE_KEYS.STORIES, data.stories);
       saveItem(BASE_STORAGE_KEYS.STORIES, data.stories);
     }
-    if (Array.isArray(data.gallery)) {
+    if (Array.isArray(data.gallery) && data.gallery.length > 0) {
       setGallery(data.gallery);
       saveToIDB(BASE_STORAGE_KEYS.GALLERY, data.gallery);
       saveItem(BASE_STORAGE_KEYS.GALLERY, data.gallery);
     }
-    if (Array.isArray(data.reviews)) {
+    if (Array.isArray(data.reviews) && data.reviews.length > 0) {
       setReviews(data.reviews);
       saveItem(BASE_STORAGE_KEYS.REVIEWS, data.reviews);
     }
-    if (Array.isArray(data.promos)) {
+    if (Array.isArray(data.promos) && data.promos.length > 0) {
       setPromos(data.promos);
       saveItem(BASE_STORAGE_KEYS.PROMOS, data.promos);
     }
@@ -372,25 +482,27 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } catch { }
     });
 
-    if (
+    const isLegacyObelisco =
       config.neighborhood === 'Balvanera / Abasto' ||
-      config.neighborhood === 'Ciudad Evita' ||
       config.neighborhood?.includes('Balvanera') ||
       config.neighborhood?.includes('Abasto') ||
       config.address?.includes('Corrientes 2450') ||
-      config.coordinates?.lat === -34.6037 ||
-      config.coordinates?.lat === -34.6047 ||
-      config.coordinates?.lat === -34.7185
-    ) {
+      (config.coordinates?.lat && Math.abs(config.coordinates.lat - -34.8219) < 0.05) ||
+      config.googleMapsUrl?.includes('-34.8219') ||
+      config.googleMapsUrl?.includes('-58.4897') ||
+      config.wazeUrl?.includes('-34.8219') ||
+      config.wazeUrl?.includes('-58.4897');
+
+    if (isLegacyObelisco) {
       const fixedConfig: BarberShopConfig = {
         ...config,
         shopName: config.shopName === "The Gentleman's Blade Barbería" ? "ELIAS-barbershop" : (config.shopName || "ELIAS-barbershop"),
         address: "Evita 1131",
         neighborhood: "El Jagüel",
         city: "Buenos Aires",
-        coordinates: { lat: -34.8322, lng: -58.4988 },
-        googleMapsUrl: "https://maps.google.com/?q=Evita+1131,+El+Jagüel,+Buenos+Aires",
-        wazeUrl: "https://waze.com/ul?q=Evita+1131,+El+Jagüel,+Buenos+Aires&navigate=yes"
+        coordinates: { lat: -34.8219, lng: -58.4897 },
+        googleMapsUrl: "https://www.google.com/maps?q=-34.8219,-58.4897",
+        wazeUrl: "https://waze.com/ul?ll=-34.8219,-58.4897&navigate=yes"
       };
       setConfig(fixedConfig);
       saveItem(BASE_STORAGE_KEYS.CONFIG, fixedConfig);
@@ -403,33 +515,22 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     let unsubFirestore: (() => void) | null = null;
     let unsubRtdb: (() => void) | null = null;
 
-    // 1. Realtime Database Listener
+    // 1. Realtime Database Listener (Safe fallback)
     if (rtdb) {
       try {
         const rtdbRef = refRtdb(rtdb, 'barbershop/main');
         unsubRtdb = onValueRtdb(
           rtdbRef,
           (snapshot) => {
-            if (snapshot.exists()) {
-              const data = snapshot.val();
-              applyCloudData(data);
-            } else {
-              // Seed initial RTDB payload if empty
-              const initialPayload = cleanForFirestore({
-                config: getSaved(BASE_STORAGE_KEYS.CONFIG, INITIAL_CONFIG),
-                barbers: getSaved(BASE_STORAGE_KEYS.BARBERS, INITIAL_BARBERS),
-                services: getSaved(BASE_STORAGE_KEYS.SERVICES, INITIAL_SERVICES),
-                appointments: getSaved(BASE_STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS),
-                stories: getSaved(BASE_STORAGE_KEYS.STORIES, INITIAL_STORIES),
-                gallery: getSaved(BASE_STORAGE_KEYS.GALLERY, INITIAL_GALLERY),
-                reviews: getSaved(BASE_STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS),
-                promos: getSaved(BASE_STORAGE_KEYS.PROMOS, INITIAL_PROMOS),
-                ownerEmail: 'informaticasurr@gmail.com',
-                allowedAdminEmails: MASTER_SUPERADMIN_EMAILS,
-                createdAt: new Date().toISOString(),
-                lastUpdated: new Date().toISOString()
-              });
-              setRtdb(rtdbRef, initialPayload).catch(() => { });
+            try {
+              if (snapshot && snapshot.exists()) {
+                const data = snapshot.val();
+                if (data && typeof data === 'object') {
+                  applyCloudData(data);
+                }
+              }
+            } catch (err) {
+              console.warn('Realtime Database processing note:', err);
             }
           },
           (err) => {
@@ -461,8 +562,8 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                   barbers: getSaved(BASE_STORAGE_KEYS.BARBERS, INITIAL_BARBERS),
                   services: getSaved(BASE_STORAGE_KEYS.SERVICES, INITIAL_SERVICES),
                   appointments: getSaved(BASE_STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS),
-                  stories: getSaved(BASE_STORAGE_KEYS.STORIES, INITIAL_STORIES),
-                  gallery: getSaved(BASE_STORAGE_KEYS.GALLERY, INITIAL_GALLERY),
+                  stories: getSaved(BASE_STORAGE_KEYS.STORIES, []),
+                  gallery: getSaved(BASE_STORAGE_KEYS.GALLERY, []),
                   reviews: getSaved(BASE_STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS),
                   promos: getSaved(BASE_STORAGE_KEYS.PROMOS, INITIAL_PROMOS),
                   ownerEmail: 'informaticasurr@gmail.com',
@@ -483,9 +584,82 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.warn('Firestore listener setup note:', e);
     }
 
+    let unsubStoriesCollection: (() => void) | null = null;
+    try {
+      const storiesColRef = collection(db, 'stories');
+      unsubStoriesCollection = onSnapshot(
+        storiesColRef,
+        (colSnap) => {
+          if (!colSnap.empty) {
+            const colStories: StoryItem[] = colSnap.docs
+              .map((d) => d.data() as StoryItem)
+              .filter((st) => st && st.id && st.title);
+            if (colStories.length > 0) {
+              colStories.sort(
+                (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+              );
+              setStories(colStories);
+              saveToIDB(BASE_STORAGE_KEYS.STORIES, colStories);
+              saveItem(BASE_STORAGE_KEYS.STORIES, colStories);
+            }
+          }
+        },
+        (err) => {
+          console.warn('Stories collection snapshot note:', err);
+        }
+      );
+    } catch (e) {
+      console.warn('Stories collection listener setup note:', e);
+    }
+
+    // 3. Realtime Database Stories Node Listener (Ensures real-time backup across devices)
+    let unsubRtdbStories: (() => void) | null = null;
+    if (rtdb) {
+      try {
+        const rtdbStoriesRef = refRtdb(rtdb, 'stories');
+        unsubRtdbStories = onValueRtdb(
+          rtdbStoriesRef,
+          (snapshot) => {
+            try {
+              if (snapshot && snapshot.exists()) {
+                const val = snapshot.val();
+                let rtdbStories: StoryItem[] = [];
+                if (Array.isArray(val)) {
+                  rtdbStories = val.filter(Boolean);
+                } else if (typeof val === 'object' && val !== null) {
+                  rtdbStories = Object.values(val);
+                }
+                if (rtdbStories.length > 0) {
+                  rtdbStories.sort(
+                    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+                  );
+                  setStories((prev) => {
+                    // If local has newer/same count, merge
+                    if (prev.length >= rtdbStories.length && prev.length > 0) return prev;
+                    return rtdbStories;
+                  });
+                  saveToIDB(BASE_STORAGE_KEYS.STORIES, rtdbStories);
+                  saveItem(BASE_STORAGE_KEYS.STORIES, rtdbStories);
+                }
+              }
+            } catch (err) {
+              console.warn('RTDB stories processing note:', err);
+            }
+          },
+          (err) => {
+            console.warn('RTDB stories listener note:', err);
+          }
+        );
+      } catch (e) {
+        console.warn('RTDB stories setup note:', e);
+      }
+    }
+
     return () => {
       if (unsubFirestore) unsubFirestore();
       if (unsubRtdb) unsubRtdb();
+      if (unsubStoriesCollection) unsubStoriesCollection();
+      if (unsubRtdbStories) unsubRtdbStories();
     };
   }, []);
 
@@ -533,28 +707,41 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     updateBarberShopSchema(config, services, barbers, reviews);
   }, [config, services, barbers, reviews]);
 
+  const isIDBStoriesLoaded = useRef(false);
+  const isIDBGalleryLoaded = useRef(false);
+
   // Restore heavy items from IndexedDB on startup
   useEffect(() => {
     loadFromIDB<StoryItem[]>(BASE_STORAGE_KEYS.STORIES, []).then((idbStories) => {
       if (Array.isArray(idbStories) && idbStories.length > 0) {
-        setStories(idbStories);
+        setStories((prev) => (prev.length === 0 ? idbStories : prev));
       }
+      isIDBStoriesLoaded.current = true;
     });
 
     loadFromIDB<GalleryItem[]>(BASE_STORAGE_KEYS.GALLERY, []).then((idbGallery) => {
       if (Array.isArray(idbGallery) && idbGallery.length > 0) {
-        setGallery(idbGallery);
+        setGallery((prev) => (prev.length === 0 ? idbGallery : prev));
       }
+      isIDBGalleryLoaded.current = true;
     });
   }, []);
 
-  // Always keep localStorage and IndexedDB updated as offline cache
+  // Always keep localStorage and IndexedDB updated as offline cache (only AFTER initial load)
   useEffect(() => { saveItem(BASE_STORAGE_KEYS.CONFIG, config); saveToIDB(BASE_STORAGE_KEYS.CONFIG, config); }, [config]);
   useEffect(() => { saveItem(BASE_STORAGE_KEYS.BARBERS, barbers); saveToIDB(BASE_STORAGE_KEYS.BARBERS, barbers); }, [barbers]);
   useEffect(() => { saveItem(BASE_STORAGE_KEYS.SERVICES, services); saveToIDB(BASE_STORAGE_KEYS.SERVICES, services); }, [services]);
   useEffect(() => { saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, appointments); saveToIDB(BASE_STORAGE_KEYS.APPOINTMENTS, appointments); }, [appointments]);
-  useEffect(() => { saveItem(BASE_STORAGE_KEYS.STORIES, stories); saveToIDB(BASE_STORAGE_KEYS.STORIES, stories); }, [stories]);
-  useEffect(() => { saveItem(BASE_STORAGE_KEYS.GALLERY, gallery); saveToIDB(BASE_STORAGE_KEYS.GALLERY, gallery); }, [gallery]);
+  useEffect(() => {
+    if (!isIDBStoriesLoaded.current) return;
+    saveItem(BASE_STORAGE_KEYS.STORIES, stories);
+    saveToIDB(BASE_STORAGE_KEYS.STORIES, stories);
+  }, [stories]);
+  useEffect(() => {
+    if (!isIDBGalleryLoaded.current) return;
+    saveItem(BASE_STORAGE_KEYS.GALLERY, gallery);
+    saveToIDB(BASE_STORAGE_KEYS.GALLERY, gallery);
+  }, [gallery]);
   useEffect(() => { saveItem(BASE_STORAGE_KEYS.REVIEWS, reviews); saveToIDB(BASE_STORAGE_KEYS.REVIEWS, reviews); }, [reviews]);
   useEffect(() => { saveItem(BASE_STORAGE_KEYS.PROMOS, promos); saveToIDB(BASE_STORAGE_KEYS.PROMOS, promos); }, [promos]);
 
@@ -878,26 +1065,77 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Stories Management
-  const addStory = (storyData: Omit<StoryItem, 'id' | 'createdAt' | 'viewsCount'>) => {
-    const newStory: StoryItem = {
-      ...storyData,
-      id: `story-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      createdAt: new Date().toISOString(),
-      viewsCount: Math.floor(Math.random() * 10) + 1
-    };
+  const addStory = async (storyData: Omit<StoryItem, 'id' | 'createdAt' | 'viewsCount'>) => {
+    try {
+      let finalMediaUrl = storyData.mediaUrl;
+      if (finalMediaUrl && finalMediaUrl.startsWith('data:image/')) {
+        finalMediaUrl = await compressBase64DataUrl(finalMediaUrl, 500, 800, 0.55);
+      } else if (finalMediaUrl && finalMediaUrl.length > 600000 && storyData.thumbnailUrl) {
+        finalMediaUrl = storyData.thumbnailUrl;
+      }
 
-    setStories((prev) => {
-      const updated = [newStory, ...prev];
-      saveToIDB(BASE_STORAGE_KEYS.STORIES, updated);
-      saveItem(BASE_STORAGE_KEYS.STORIES, updated);
-      saveToCloud({ stories: updated });
-      return updated;
-    });
+      let finalThumbnailUrl = storyData.thumbnailUrl;
+      if (finalThumbnailUrl && finalThumbnailUrl.startsWith('data:image/') && finalThumbnailUrl.length > 80000) {
+        finalThumbnailUrl = await compressBase64DataUrl(finalThumbnailUrl, 400, 600, 0.55);
+      }
 
-    triggerPushNotification('Nueva Historia Publicada', `Se publicó la historia "${newStory.title}".`);
+      const newStory: StoryItem = {
+        ...storyData,
+        mediaUrl: finalMediaUrl,
+        thumbnailUrl: finalThumbnailUrl || undefined,
+        id: `story-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+        createdAt: new Date().toISOString(),
+        viewsCount: Math.floor(Math.random() * 10) + 1
+      };
+
+      const cleanedStory = cleanForFirestore(newStory);
+
+      // 1. Update state & IndexedDB immediately
+      setStories((prev) => {
+        const updated = [newStory, ...prev.filter((s) => s.id !== newStory.id)];
+        saveToIDB(BASE_STORAGE_KEYS.STORIES, updated);
+        saveItem(BASE_STORAGE_KEYS.STORIES, updated);
+        return updated;
+      });
+
+      // 2. Persist directly to Firestore dedicated 'stories' collection (1 document per story)
+      try {
+        await setDoc(doc(db, 'stories', newStory.id), cleanedStory, { merge: true });
+      } catch (err: any) {
+        console.warn('Individual story Firestore setDoc note:', err);
+      }
+
+      // 3. Persist directly to Realtime Database dedicated node
+      if (rtdb) {
+        try {
+          await setRtdb(refRtdb(rtdb, `stories/${newStory.id}`), cleanedStory);
+        } catch (err) {
+          console.warn('Individual story RTDB save note:', err);
+        }
+      }
+
+      // 4. Update main cloud documents
+      setStories((current) => {
+        saveToCloud({ stories: current });
+        return current;
+      });
+
+      triggerPushNotification('Nueva Historia Publicada', `Se publicó la historia "${newStory.title}".`);
+    } catch (err) {
+      console.error('Error adding story:', err);
+    }
   };
 
-  const deleteStory = (id: string) => {
+  const deleteStory = async (id: string) => {
+    // 1. Delete from Firestore collection
+    deleteDoc(doc(db, 'stories', id)).catch(() => { });
+
+    // 2. Delete from Realtime Database
+    if (rtdb) {
+      removeRtdb(refRtdb(rtdb, `stories/${id}`)).catch(() => { });
+    }
+
+    // 3. Update local state & IDB
     setStories((prev) => {
       const updated = prev.filter((s) => s.id !== id);
       saveToIDB(BASE_STORAGE_KEYS.STORIES, updated);
@@ -908,13 +1146,24 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const incrementStoryViews = (id: string) => {
+    let newViews = 1;
     setStories((prev) => {
-      const updated = prev.map((s) => (s.id === id ? { ...s, viewsCount: s.viewsCount + 1 } : s));
+      const updated = prev.map((s) => {
+        if (s.id === id) {
+          newViews = (s.viewsCount || 0) + 1;
+          return { ...s, viewsCount: newViews };
+        }
+        return s;
+      });
       saveToIDB(BASE_STORAGE_KEYS.STORIES, updated);
       saveItem(BASE_STORAGE_KEYS.STORIES, updated);
-      saveToCloud({ stories: updated });
       return updated;
     });
+
+    setDoc(doc(db, 'stories', id), { viewsCount: newViews }, { merge: true }).catch(() => { });
+    if (rtdb) {
+      updateRtdb(refRtdb(rtdb, `stories/${id}`), { viewsCount: newViews }).catch(() => { });
+    }
   };
 
   // Gallery Management
@@ -1119,8 +1368,8 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setBarbers(INITIAL_BARBERS);
     setServices(INITIAL_SERVICES);
     setAppointments(INITIAL_APPOINTMENTS);
-    setStories(INITIAL_STORIES);
-    setGallery(INITIAL_GALLERY);
+    setStories([]);
+    setGallery([]);
     setReviews(INITIAL_REVIEWS);
     setPromos(INITIAL_PROMOS);
 
@@ -1128,8 +1377,8 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     saveItem(BASE_STORAGE_KEYS.BARBERS, INITIAL_BARBERS);
     saveItem(BASE_STORAGE_KEYS.SERVICES, INITIAL_SERVICES);
     saveItem(BASE_STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS);
-    saveItem(BASE_STORAGE_KEYS.STORIES, INITIAL_STORIES);
-    saveItem(BASE_STORAGE_KEYS.GALLERY, INITIAL_GALLERY);
+    saveItem(BASE_STORAGE_KEYS.STORIES, []);
+    saveItem(BASE_STORAGE_KEYS.GALLERY, []);
     saveItem(BASE_STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
     saveItem(BASE_STORAGE_KEYS.PROMOS, INITIAL_PROMOS);
 
@@ -1138,8 +1387,8 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       barbers: INITIAL_BARBERS,
       services: INITIAL_SERVICES,
       appointments: INITIAL_APPOINTMENTS,
-      stories: INITIAL_STORIES,
-      gallery: INITIAL_GALLERY,
+      stories: [],
+      gallery: [],
       reviews: INITIAL_REVIEWS,
       promos: INITIAL_PROMOS
     });

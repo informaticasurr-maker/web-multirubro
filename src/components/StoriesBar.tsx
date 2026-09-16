@@ -222,12 +222,32 @@ export const StoriesBar: React.FC<StoriesBarProps> = ({
                   className="w-[105px] sm:w-[125px] md:w-[140px] aspect-[9/14] flex-shrink-0 snap-start rounded-2xl overflow-hidden relative group cursor-pointer border border-slate-800/80 hover:border-amber-500/60 transition-all hover:scale-[1.02] shadow-xl text-left bg-slate-900"
                 >
                   {/* Media background preview */}
-                  <img
-                    src={story.thumbnailUrl || story.mediaUrl}
-                    alt={story.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                  />
+                  {story.mediaType === 'video' ? (
+                    story.thumbnailUrl ? (
+                      <img
+                        src={story.thumbnailUrl}
+                        alt={story.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <video
+                        src={story.mediaUrl}
+                        muted
+                        loop
+                        autoPlay
+                        playsInline
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none"
+                      />
+                    )
+                  ) : (
+                    <img
+                      src={story.thumbnailUrl || story.mediaUrl}
+                      alt={story.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      loading="lazy"
+                    />
+                  )}
 
                   {/* Gradient overlay for readability */}
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-black/40 pointer-events-none" />

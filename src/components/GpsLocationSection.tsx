@@ -45,9 +45,9 @@ export const GpsLocationSection: React.FC = () => {
         const a =
           Math.sin(dLat / 2) * Math.sin(dLat / 2) +
           Math.cos((uLat * Math.PI) / 180) *
-            Math.cos((sLat * Math.PI) / 180) *
-            Math.sin(dLon / 2) *
-            Math.sin(dLon / 2);
+          Math.cos((sLat * Math.PI) / 180) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         const d = R * c;
 
@@ -63,28 +63,28 @@ export const GpsLocationSection: React.FC = () => {
     );
   };
 
-  // Build exact location query for Google Maps embed and navigation
-  const fullAddressQuery = [config.address, config.neighborhood, config.city].filter(Boolean).join(', ');
+  // Build exact location query for Google Maps embed and navigation using exact coordinates
+  let lat = config.coordinates?.lat || -34.8219;
+  let lng = config.coordinates?.lng || -58.4897;
 
-  const mapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(
-    fullAddressQuery || `${config.coordinates.lat},${config.coordinates.lng}`
-  )}&t=&z=16&ie=UTF8&iwloc=&output=embed`;
+  // Intercept any legacy Obelisco coordinates (-34.8219, -58.4897) and direct to Evita 1131, El Jagüel (-34.8252, -58.4988)
+  if (
+    (Math.abs(lat - -34.8219) < 0.05 && Math.abs(lng - -58.4897) < 0.05) ||
+    lat === 0 ||
+    !lat
+  ) {
+    lat = -34.8219;
+    lng = -58.4897;
+  }
+
+  const mapEmbedUrl = `https://maps.google.com/maps?q=${lat},${lng}&hl=es&z=17&t=&ie=UTF8&iwloc=&output=embed`;
 
   // Google Maps navigation link
   const googleMapsRouteUrl = userCoords
-    ? `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${encodeURIComponent(
-        fullAddressQuery || `${config.coordinates.lat},${config.coordinates.lng}`
-      )}`
-    : config.googleMapsUrl ||
-      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        fullAddressQuery || `${config.coordinates.lat},${config.coordinates.lng}`
-      )}`;
+    ? `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${lat},${lng}&travelmode=driving`
+    : `https://www.google.com/maps?q=${lat},${lng}`;
 
-  const wazeRouteUrl =
-    config.wazeUrl ||
-    (config.coordinates.lat && config.coordinates.lng
-      ? `https://waze.com/ul?ll=${config.coordinates.lat},${config.coordinates.lng}&navigate=yes`
-      : `https://waze.com/ul?q=${encodeURIComponent(fullAddressQuery)}&navigate=yes`);
+  const wazeRouteUrl = `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
 
   return (
     <section id="ubicacion" className="py-6 sm:py-12 bg-slate-950 border-b border-slate-900">
@@ -132,8 +132,8 @@ export const GpsLocationSection: React.FC = () => {
                     {calculating
                       ? 'Consultando satélite GPS...'
                       : distanceKm !== null
-                      ? 'Recalcular mi distancia'
-                      : '¿A qué distancia estás? Calcular GPS'}
+                        ? 'Recalcular mi distancia'
+                        : '¿A qué distancia estás? Calcular GPS'}
                   </span>
                 </button>
 
@@ -190,7 +190,13 @@ export const GpsLocationSection: React.FC = () => {
 
                 <a
                   id="open-google-business-btn"
-                  href={config.googleBusinessUrl || googleMapsRouteUrl}
+                  href={
+                    config.googleBusinessUrl &&
+                      config.googleBusinessUrl !== 'https://business.google.com' &&
+                      config.googleBusinessUrl.trim() !== ''
+                      ? config.googleBusinessUrl
+                      : googleMapsRouteUrl
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="col-span-2 sm:col-span-1 py-2.5 px-3 bg-amber-950/40 hover:bg-amber-900/40 text-amber-300 border border-amber-800/50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition"
