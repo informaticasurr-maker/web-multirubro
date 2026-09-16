@@ -222,9 +222,9 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         saved.address = "Evita 1131";
         saved.neighborhood = "El Jagüel";
         saved.city = "Buenos Aires";
-        saved.coordinates = { lat: -34.8219, lng: -58.4897 };
-        saved.googleMapsUrl = "https://www.google.com/maps?q=-34.8219,-58.4897";
-        saved.wazeUrl = "https://waze.com/ul?ll=-34.8219,-58.4897&navigate=yes";
+        saved.coordinates = { lat: -34.8328, lng: -58.4957 };
+        saved.googleMapsUrl = "https://www.google.com/maps?q=-34.8328,-58.4957";
+        saved.wazeUrl = "https://waze.com/ul?ll=-34.8328,-58.4957&navigate=yes";
         saveItem(BASE_STORAGE_KEYS.CONFIG, saved);
       }
     }
@@ -427,9 +427,9 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         incomingConfig.address = "Evita 1131";
         incomingConfig.neighborhood = "El Jagüel";
         incomingConfig.city = "Buenos Aires";
-        incomingConfig.coordinates = { lat: -34.8219, lng: -58.4897 };
-        incomingConfig.googleMapsUrl = "https://www.google.com/maps?q=-34.8219,-58.4897";
-        incomingConfig.wazeUrl = "https://waze.com/ul?ll=-34.8219,-58.4897&navigate=yes";
+        incomingConfig.coordinates = { lat: -34.8328, lng: -58.4957 };
+        incomingConfig.googleMapsUrl = "https://www.google.com/maps?q=-34.8328,-58.4957";
+        incomingConfig.wazeUrl = "https://waze.com/ul?ll=-34.8328,-58.4957&navigate=yes";
       }
       setConfig((prev) => {
         const updated = { ...prev, ...incomingConfig };
@@ -503,9 +503,9 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         address: "Evita 1131",
         neighborhood: "El Jagüel",
         city: "Buenos Aires",
-        coordinates: { lat: -34.8219, lng: -58.4897 },
-        googleMapsUrl: "https://www.google.com/maps?q=-34.8219,-58.4897",
-        wazeUrl: "https://waze.com/ul?ll=-34.8219,-58.4897&navigate=yes"
+        coordinates: { lat: -34.8328, lng: -58.4957 },
+        googleMapsUrl: "https://www.google.com/maps?q=-34.8328,-58.4957",
+        wazeUrl: "https://waze.com/ul?ll=-34.8328,-58.4957&navigate=yes"
       };
       setConfig(fixedConfig);
       saveItem(BASE_STORAGE_KEYS.CONFIG, fixedConfig);

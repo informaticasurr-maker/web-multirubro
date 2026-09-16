@@ -29,11 +29,11 @@ async function updateCloudConfig() {
     neighborhood: "El Jagüel",
     city: "Buenos Aires",
     coordinates: {
-      lat: -34.8219,
-      lng: -58.4897
+      lat: -34.8328,
+      lng: -58.4957
     },
-    googleMapsUrl: "https://www.google.com/maps?q=-34.8219,-58.4897",
-    wazeUrl: "https://waze.com/ul?ll=-34.8219,-58.4897&navigate=yes"
+    googleMapsUrl: "https://www.google.com/maps?q=-34.8328,-58.4957",
+    wazeUrl: "https://waze.com/ul?ll=-34.8328,-58.4957&navigate=yes"
   };
 
   if (snap.exists()) {
