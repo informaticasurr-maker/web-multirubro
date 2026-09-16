@@ -210,20 +210,21 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         saved.neighborhood?.includes('Balvanera') ||
         saved.neighborhood?.includes('Abasto') ||
         saved.address?.includes('Corrientes 2450') ||
-        (saved.coordinates?.lat && Math.abs(saved.coordinates.lat - -34.8219) < 0.05) ||
-        saved.googleMapsUrl?.includes('-34.8219') ||
-        saved.googleMapsUrl?.includes('-58.4897') ||
-        saved.wazeUrl?.includes('-34.8219') ||
-        saved.wazeUrl?.includes('-58.4897');
+        (saved.coordinates?.lat && saved.coordinates.lat > -34.70) ||
+        (saved.coordinates?.lat && Math.abs(saved.coordinates.lat - -34.6037) < 0.08) ||
+        saved.googleMapsUrl?.includes('-34.6037') ||
+        saved.googleMapsUrl?.includes('-58.3816') ||
+        saved.wazeUrl?.includes('-34.6037') ||
+        saved.wazeUrl?.includes('-58.3816');
 
       if (isLegacyObelisco) {
         saved.shopName = saved.shopName === "The Gentleman's Blade Barbería" ? "ELIAS-barbershop" : (saved.shopName || "ELIAS-barbershop");
         saved.address = "Evita 1131";
         saved.neighborhood = "El Jagüel";
         saved.city = "Buenos Aires";
-        saved.coordinates = { lat: -34.8252, lng: -58.4988 };
-        saved.googleMapsUrl = "https://www.google.com/maps?q=-34.8252,-58.4988";
-        saved.wazeUrl = "https://waze.com/ul?ll=-34.8252,-58.4988&navigate=yes";
+        saved.coordinates = { lat: -34.8219, lng: -58.4897 };
+        saved.googleMapsUrl = "https://www.google.com/maps?q=-34.8219,-58.4897";
+        saved.wazeUrl = "https://waze.com/ul?ll=-34.8219,-58.4897&navigate=yes";
         saveItem(BASE_STORAGE_KEYS.CONFIG, saved);
       }
     }
@@ -414,20 +415,21 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         incomingConfig.neighborhood?.includes('Balvanera') ||
         incomingConfig.neighborhood?.includes('Abasto') ||
         incomingConfig.address?.includes('Corrientes 2450') ||
-        (incomingConfig.coordinates?.lat && Math.abs(incomingConfig.coordinates.lat - -34.8219) < 0.05) ||
-        incomingConfig.googleMapsUrl?.includes('-34.8219') ||
-        incomingConfig.googleMapsUrl?.includes('-58.4897') ||
-        incomingConfig.wazeUrl?.includes('-34.8219') ||
-        incomingConfig.wazeUrl?.includes('-58.4897');
+        (incomingConfig.coordinates?.lat && incomingConfig.coordinates.lat > -34.70) ||
+        (incomingConfig.coordinates?.lat && Math.abs(incomingConfig.coordinates.lat - -34.6037) < 0.08) ||
+        incomingConfig.googleMapsUrl?.includes('-34.6037') ||
+        incomingConfig.googleMapsUrl?.includes('-58.3816') ||
+        incomingConfig.wazeUrl?.includes('-34.6037') ||
+        incomingConfig.wazeUrl?.includes('-58.3816');
 
       if (isLegacyObelisco) {
         incomingConfig.shopName = incomingConfig.shopName === "The Gentleman's Blade Barbería" ? "ELIAS-barbershop" : (incomingConfig.shopName || "ELIAS-barbershop");
         incomingConfig.address = "Evita 1131";
         incomingConfig.neighborhood = "El Jagüel";
         incomingConfig.city = "Buenos Aires";
-        incomingConfig.coordinates = { lat: -34.8252, lng: -58.4988 };
-        incomingConfig.googleMapsUrl = "https://www.google.com/maps?q=-34.8252,-58.4988";
-        incomingConfig.wazeUrl = "https://waze.com/ul?ll=-34.8252,-58.4988&navigate=yes";
+        incomingConfig.coordinates = { lat: -34.8219, lng: -58.4897 };
+        incomingConfig.googleMapsUrl = "https://www.google.com/maps?q=-34.8219,-58.4897";
+        incomingConfig.wazeUrl = "https://waze.com/ul?ll=-34.8219,-58.4897&navigate=yes";
       }
       setConfig((prev) => {
         const updated = { ...prev, ...incomingConfig };
@@ -487,11 +489,12 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       config.neighborhood?.includes('Balvanera') ||
       config.neighborhood?.includes('Abasto') ||
       config.address?.includes('Corrientes 2450') ||
-      (config.coordinates?.lat && Math.abs(config.coordinates.lat - -34.8219) < 0.05) ||
-      config.googleMapsUrl?.includes('-34.8219') ||
-      config.googleMapsUrl?.includes('-58.4897') ||
-      config.wazeUrl?.includes('-34.8219') ||
-      config.wazeUrl?.includes('-58.4897');
+      (config.coordinates?.lat && config.coordinates.lat > -34.70) ||
+      (config.coordinates?.lat && Math.abs(config.coordinates.lat - -34.6037) < 0.08) ||
+      config.googleMapsUrl?.includes('-34.6037') ||
+      config.googleMapsUrl?.includes('-58.3816') ||
+      config.wazeUrl?.includes('-34.6037') ||
+      config.wazeUrl?.includes('-58.3816');
 
     if (isLegacyObelisco) {
       const fixedConfig: BarberShopConfig = {
