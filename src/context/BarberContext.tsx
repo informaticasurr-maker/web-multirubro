@@ -427,9 +427,9 @@ export const BarberProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         incomingConfig.address = "Evita 1131";
         incomingConfig.neighborhood = "El Jagüel";
         incomingConfig.city = "Buenos Aires";
-        incomingConfig.coordinates = { lat: -34.8328, lng: -58.4957 };
-        incomingConfig.googleMapsUrl = "https://www.google.com/maps?q=-34.8328,-58.4957";
-        incomingConfig.wazeUrl = "https://waze.com/ul?ll=-34.8328,-58.4957&navigate=yes";
+        incomingConfig.coordinates = { lat: -34.8411587, lng: -58.4884242 };
+        incomingConfig.googleMapsUrl = "https://www.google.com/maps/place/Evita+1131,+B1805DOS+El+Jag%C3%BCel,+Provincia+de+Buenos+Aires/@-34.8411543,-58.4909991,17z/data=!3m1!4b1!4m5!3m4!1s0x95bcd136700b4dc7:0x19e749cfad3dbb70!8m2!3d-34.8411587!4d-58.4884242";
+        incomingConfig.wazeUrl = "https://waze.com/ul?ll=-34.8411587,-58.4884242&navigate=yes";
       }
       setConfig((prev) => {
         const updated = { ...prev, ...incomingConfig };

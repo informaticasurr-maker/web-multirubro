@@ -29,11 +29,11 @@ async function updateCloudConfig() {
     neighborhood: "El Jagüel",
     city: "Buenos Aires",
     coordinates: {
-      lat: -34.8328,
-      lng: -58.4957
+      lat: -34.8411587,
+      lng: -58.4884242
     },
-    googleMapsUrl: "https://www.google.com/maps?q=-34.8328,-58.4957",
-    wazeUrl: "https://waze.com/ul?ll=-34.8328,-58.4957&navigate=yes"
+    googleMapsUrl: "https://www.google.com/maps/place/Evita+1131,+B1805DOS+El+Jag%C3%BCel,+Provincia+de+Buenos+Aires/@-34.8411543,-58.4909991,17z/data=!3m1!4b1!4m5!3m4!1s0x95bcd136700b4dc7:0x19e749cfad3dbb70!8m2!3d-34.8411587!4d-58.4884242",
+    wazeUrl: "https://waze.com/ul?ll=-34.8411587,-58.4884242&navigate=yes"
   };
 
   if (snap.exists()) {

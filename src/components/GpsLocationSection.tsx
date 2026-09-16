@@ -64,18 +64,18 @@ export const GpsLocationSection: React.FC = () => {
   };
 
   // Build exact location query for Google Maps embed and navigation using exact coordinates
-  let lat = config.coordinates?.lat ?? -34.8328;
-  let lng = config.coordinates?.lng ?? -58.4957;
+  let lat = config.coordinates?.lat ?? -34.8411587;
+  let lng = config.coordinates?.lng ?? -58.4884242;
 
-  // Intercept any legacy Obelisco / Microcentro coordinates (-34.6037, -58.3816) and direct to Evita 1131, El Jagüel (-34.8328, -58.4957)
+  // Intercept any legacy Obelisco / Microcentro coordinates (-34.6037, -58.3816) and direct to Evita 1131, El Jagüel (-34.8411587, -58.4884242)
   if (
     lat > -34.70 || // Obelisco / CABA is around -34.6037 (greater than -34.70)
     (Math.abs(lat - -34.6037) < 0.08 && Math.abs(lng - -58.3816) < 0.08) ||
     lat === 0 ||
     !lat
   ) {
-    lat = -34.8328;
-    lng = -58.4957;
+    lat = -34.8411587;
+    lng = -58.4884242;
   }
 
   const mapEmbedUrl = `https://maps.google.com/maps?q=${lat},${lng}&hl=es&z=17&t=&ie=UTF8&iwloc=&output=embed`;

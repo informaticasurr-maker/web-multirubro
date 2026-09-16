@@ -16,11 +16,11 @@ export const INITIAL_CONFIG: BarberShopConfig = {
   "adminName": "Elias  Cajal ",
   "openingHoursText": "Lunes a Sábado: 09:00 a 21:00 hs | Domingos: 11:00 a 18:00 hs",
   "coordinates": {
-    "lat": -34.8328,
-    "lng": -58.4957
+    "lat": -34.8411587,
+    "lng": -58.4884242
   },
   "headlinePrefix": "Tu Corte Perfecto,",
-  "wazeUrl": "https://waze.com/ul?ll=-34.8328,-58.4957&navigate=yes",
+  "wazeUrl": "https://waze.com/ul?ll=-34.8411587,-58.4884242&navigate=yes",
   "subheadlineColorTheme": "slate-300",
   "subheadlineSize": "normal",
   "slogan": "Cortes de alta precisión, afeitados clásicos y estilo que impone presencia.",
